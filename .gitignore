@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+/milestone 1/report1.aux
+/milestone 1/report1.log
+/milestone 1/report1.run.xml
+/milestone 1/report1-blx.bib
+.idea/

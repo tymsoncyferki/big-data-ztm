@@ -1,0 +1,67 @@
+
+
+\documentclass[8pt]{extarticle}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{array}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{pdflscape}
+\usepackage{csvsimple}
+\usepackage{longtable}
+
+
+
+\usepackage{amsmath}
+
+\newcommand{\hardswish}{\operatorname{h-swish}}
+\newcommand{\relu}{\operatorname{ReLU}}
+\newcommand{\sigmoid}{\operatorname{\sigma}}
+
+\usepackage[backend=bibtex, style=ieee]{biblatex}
+%\addbibresource{bibliography.bib}
+
+\usepackage{caption}
+\usepackage{subcaption}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{multirow}
+
+\title{
+    \textbf{Big Data Solution for Warsaw Public Transit delay prediction -  Milestone 1 report} \\[0.5cm]
+    \large Big Data Analytics
+}
+\author{Emil Łasocha \and Michał Szewczak \and Sebastian Trojan \and Tymoteusz Urban}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\newpage
+\section{Datasources}
+Data used in the project will be obtained from data published by the city of Warsaw through its open data APIs, available at
+(\texttt{https://dane.um.warszawa.pl}), but with multiple endpoints of both streaming and batch nature. Polled data is returned in json format for all endpoints available. All data size estimations where aquired using models available in Gemini free tier.
+\subsection{Streaming data}
+\begin{itemize}
+
+  \item \textbf{Vehicle position data}live GPS
+    pings for every active vehicle: \texttt{Lat}, \texttt{Lon}, \texttt{Time},
+    \texttt{Lines}, texttt{Brigade}, \texttt{VehicleNumber}. During rush hour there are about 450 trams and 1400 buses deployed, and such information is refreshed every 10s, though we would probably poll it in larger intervals, in order not to overload our limited infrastructure and not to exceed potential rate-limiting. A result of single poll has estimated size of 200KB.
+  \item \textbf{Weather data} - air and surface temperature,
+    precipitation,humidity, wind, and visibility for 18 stations located throughout the city. This data is refreshed every 10 minutes, though in order to use it as a streaming data source it is possible to poll it in shorter intervals for this puprose. A result of a single poll is estimated size of 4KB.
+     \item \textbf{Air quality data} - returns a json with short description, monitoring station parameters, including type and location, and air quality parameters in form of nested records for 108 stations located throughout the city. This data is refreshed every 10 minutes, though in order to use it as a streaming data source it is possible to poll it in shorter intervals for this puprose. A result of a single poll is estimated size of 120KB.
+\end{itemize}
+\subsection{Batch data}
+\begin{itemize}
+  \item  \textbf{Timetable data} (static data, which should be acquired once per day) -
+    stop locations, line-stop assignments, and per-brigade precise schedules
+    for every  stop-line-brigade combination in the network. This data daily (assuming daily batches) estimated size is at 140-200MB.
+\end{itemize}
+
+
+\end{document}
