@@ -1,5 +1,3 @@
-
-
 \documentclass[8pt]{extarticle}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -63,5 +61,77 @@ Data used in the project will be obtained from data published by the city of War
     for every  stop-line-brigade combination in the network. This data daily (assuming daily batches) estimated size is at 140-200MB.
 \end{itemize}
 
+\section{Use of Artificial Intelligence}
+
+AI tools will be used throughout the project to support software development, technical problem-solving, and report preparation. Their use will focus on improving productivity and assisting the team while ensuring that \textbf{all generated content and code are reviewed and verified by the team members}. \\ \\
+The planned uses of AI include:
+\begin{itemize}
+    \item \textbf{Code development and editing:} Using AI tools integrated into the IDE to assist with writing, editing and debugging the code.
+    \item \textbf{Technical support:} Using AI to clarify technical concepts, explain unfamiliar technologies, suggest implementation approaches, and assist in troubleshooting errors.
+    \item \textbf{Report writing and editing:} Using AI to help structure the report, improve clarity and readability, correct grammatical and linguistic errors, and refine technical descriptions.
+    \item \textbf{Verification of results:} Reviewing and testing AI-generated code, suggestions, and written content to ensure their correctness, relevance, and consistency with the actual project implementation.
+\end{itemize}
+AI will serve as a supporting tool rather than a replacement for the team's own work. All team members will remain responsible for understanding, validating, and maintaining the code and documentation they produce.
+
+\section{Division of Responsibilities}
+
+The project work is divided among four team members, each responsible for a specific component of the system and supported by another team member.
+
+\subsection{Data Ingestion and Validation}
+
+\textbf{Main responsible person: Michał}, supporting team member: Sebastian.
+\begin{itemize}
+    \item Selecting and testing the weather API and public transport data source.
+    \item Creating scripts in order to retrieve data from external APIs.
+    \item Configuring Apache NiFi to automate the data ingestion process.
+    \item Configuring Apache Kafka topics, such as \texttt{weather} and \texttt{buses}.
+    \item Implementing data validation, error handling and duplicate detection.
+    \item Defining and documenting data schemas.
+    \item Documenting the data collection process.
+\end{itemize}
+\textbf{Expected outcome:} A working data ingestion pipeline that retrieves, validates, and delivers data to Apache Kafka.
+
+\subsection{Data Storage and Batch Processing}
+
+\textbf{Main responsible person: Emil}, supporting team member: Michał.
+\begin{itemize}
+    \item Configuring Apache Hadoop, HDFS and Apache Hive.
+    \item Designing a directory structure for raw, cleaned, and processed data.
+    \item Creating Hive tables and developing SQL queries.
+    \item Cleaning the collected data and handling missing or invalid values.
+    \item Combining weather and public transport data into a unified dataset.
+    \item Implementing batch processing jobs using Apache Spark.
+    \item Calculating historical statistics, such as average bus delays by route and weather conditions.
+\end{itemize}
+\textbf{Expected outcome:} A functional data storage layer, a unified dataset, and a repeatable batch processing pipeline for historical analysis.
+
+\subsection{Stream Processing and Machine Learning}
+
+\textbf{Main responsible person: Tymoteusz}, supporting team member: Emil.
+\begin{itemize}
+    \item Configuring Apache Spark Structured Streaming.
+    \item Implementing the consumption of events from Apache Kafka.
+    \item Calculating real-time metrics and statistics using streaming data.
+    \item Preparing features from weather and public transport data for machine learning.
+    \item Training a machine learning model to predict bus delays.
+    \item Evaluating model performance with metrics.
+    \item Integrating the trained model into the streaming pipeline to generate predictions.
+\end{itemize}
+\textbf{Expected outcome:} A working stream processing pipeline capable of calculating real-time metrics and generating bus delay predictions using a trained ML model.
+
+\subsection{Results Serving, Dashboard, and System Integration}
+
+\textbf{Main responsible person: Sebastian}, supporting team member: Tymoteusz
+.\begin{itemize}
+    \item Configuring a database and creating tables for analytical results and predictions.
+    \item Defining common data formats and interfaces with the other team members.
+    \item Integrating the results of batch and stream processing.
+    \item Developing an interactive dashboard using Streamlit.
+    \item Visualising weather conditions, bus delays, historical statistics, and machine learning predictions.
+    \item Integrating system components using Docker Compose.
+    \item Testing the overall system and resolving integration issues.
+    \item Preparing instructions for setting up and running the complete system.
+\end{itemize}
+\textbf{Expected outcome:} A functional dashboard presenting the results of the project, an integrated system, and documentation explaining how to run the application.
 
 \end{document}
