@@ -206,7 +206,7 @@ The system will collect three types of stream data: vehicle GPS positions, weath
 
 The batch path will use historical data stored in HDFS. The data will be organised into three groups. Raw will contain the original source records. Cleaned will contain validated and standardised data. Processed will contain integrated datasets, estimated delays, and features prepared for further analysis. Apache Spark will perform the cleaning and processing steps, saving both the cleaned and processed datasets in HDFS in Parquet format.
 
-Historical GPS observations will be combined with timetables and environmental measurements to estimate delays. Spark will then calculate statistics such as average delays by line, stop, and time period. Historical datasets and aggregates will be retained in HDFS, while selected statistics will also be written to Cassandra for the dashboard.
+Historical GPS observations will be combined with timetables and environmental measurements to estimate delays. Spark will then calculate statistics such as average delays by line, stop, time period, and weather conditions. Historical datasets and aggregates will be retained in HDFS, while selected statistics will also be written to Cassandra for the dashboard.
 
 A prediction model will be trained and evaluated using the processed historical data. The trained model will be stored in HDFS for use by the stream path. The batch path will also provide the latest processed timetable for real-time calculations.
 
@@ -245,9 +245,9 @@ The system will use open-source Big Data technologies organised into ingestion, 
 
 \textbf{Apache Spark Structured Streaming} will read events from Kafka and process current observations. It will use the latest timetable and the trained \textbf{Spark MLlib} model to calculate delays and generate predictions. Current observations, statistics, and predictions will be saved to Cassandra.
 
-\subsection{Serving Layerand Dashboard }
+\subsection{Serving Layer and Dashboard}
 
-\textbf{Apache Cassandra} will store current information from the speed layer and selected historical aggregates from the batch layer. \textbf{Streamlit} will provide a dashboard that reads these results from Cassandra and presents them through interactive visualisations.
+\textbf{Apache Cassandra} will store current information from the speed layer and selected historical aggregates and model evaluation metrics from the batch layer. \textbf{Streamlit} will provide a dashboard that reads these results from Cassandra and presents them through interactive visualisations.
 
 \section{Use of Artificial Intelligence}
 
