@@ -189,7 +189,7 @@ Data used in the project will be obtained from data published by the city of War
 
 \section{Data Processing Steps}
 
-The proposed solution is based on the \textbf{Lambda Architecture}, which combines the processing of current observations with the analysis of historical data. These two paths support real-time delay predictions and historical statistics, respectively. Their results are brought together in a serving layer and displayed through a dashboard. Figure~\ref{fig:lambda-data-flow} presents the overall data flow.
+The proposed solution is based on the Lambda Architecture, which combines the processing of current observations with the analysis of historical data. These paths support real-time delay predictions and historical statistics. Their results are brought together in a serving layer and displayed through a dashboard. Figure~\ref{fig:lambda-data-flow} presents the overall data flow.
 
 \begin{figure}[H]
     \centering
@@ -198,59 +198,56 @@ The proposed solution is based on the \textbf{Lambda Architecture}, which combin
     \label{fig:lambda-data-flow}
 \end{figure}
 
-\subsection{Data ingestion}
+\subsection{Data Ingestion}
 
-The system will collect three types of stream data: vehicle GPS positions, weather measurements, and air quality measurements. Public transport timetables will form a separate batch source, refreshed approximately once per day. The ingestion component will retrieve and validate data from the corresponding APIs. Original responses from all four sources will be archived in HDFS, while incoming GPS and environmental observations will also be forwarded to Kafka for stream processing.
+The system will collect three types of stream data: vehicle GPS positions, weather measurements, and air quality measurements. Public transport timetables will form a separate batch source, refreshed approximately once per day. The ingestion component will retrieve and validate data from the corresponding APIs. Original responses from all four sources will be stored in HDFS. Incoming GPS and environmental observations will also be forwarded to Kafka for stream processing.
 
-\subsection{Batch processing}
+\subsection{Batch Processing}
 
-The batch path will use the historical data stored in HDFS. Processing will produce three groups of datasets: \textbf{Raw}, containing the original source records; \textbf{Cleaned}, containing standardised and validated data; and \textbf{Processed}, containing integrated data and analytical results. The cleaned and processed datasets will be stored in Parquet format.
+The batch path will use historical data stored in HDFS. The data will be organised into three groups. Raw will contain the original source records. Cleaned will contain validated and standardised data. Processed will contain integrated datasets, estimated delays, and features prepared for further analysis. Apache Spark will perform the cleaning and processing steps, saving both the cleaned and processed datasets in HDFS in Parquet format.
 
-Historical GPS observations will be combined with timetables and environmental measurements to estimate delays and prepare features for machine learning. The batch path will also calculate statistics such as average delays by line, stop, time period, and weather conditions. These datasets will remain available in HDFS, while selected aggregates will be transferred to the serving layer.
+Historical GPS observations will be combined with timetables and environmental measurements to estimate delays. Spark will then calculate statistics such as average delays by line, stop, and time period. Historical datasets and aggregates will be retained in HDFS, while selected statistics will also be written to Cassandra for the dashboard.
 
-A prediction model will be trained and evaluated using the processed historical data. The resulting model will be saved in HDFS for use by the stream path. The batch path will also make the latest processed timetable available for real-time calculations.
+A prediction model will be trained and evaluated using the processed historical data. The trained model will be stored in HDFS for use by the stream path. The batch path will also provide the latest processed timetable for real-time calculations.
 
-\subsection{Stream processing}
+\subsection{Stream Processing}
 
-The stream path will continuously receive GPS, weather, and air quality events from Kafka. Current vehicle observations will be combined with the latest environmental information and the processed timetable to determine the current transport situation. The stream processor will then prepare input features and use the previously trained model to predict delays.
+The stream path will receive GPS, weather, and air quality events from Kafka. Current vehicle positions will be combined with environmental measurements and the latest processed timetable. The system will estimate current delays, prepare model features, and use the model trained in the batch path to predict future delays.
 
-The resulting vehicle positions, environmental measurements, estimated delays, predictions, and current statistics will be written to Cassandra. This provides the serving layer with regularly updated information about public transport conditions.
+Current vehicle positions, environmental measurements, estimated delays, predictions, and real-time statistics will be written to Cassandra.
 
-\subsection{Data consumption}
+\subsection{Data Consumption}
 
-The dashboard will combine current information from the stream path with historical aggregates generated by the batch path. Users will be able to view vehicle positions, environmental conditions, historical delay patterns, and delay predictions in one application.
+The Streamlit dashboard will read current information and historical aggregates from Cassandra. Users will be able to view vehicle positions, environmental conditions, historical delay patterns, and delay predictions in one application.
 
-\section{Solution Infrastructure}
+\section{Solution Architecture}
 
-The system will use open-source Big Data technologies organised into ingestion, batch, speed, serving, and consumption components. Figure~\ref{fig:lambda-infrastructure} shows the proposed technologies and their main connections.
+The system will use open-source Big Data technologies organised into ingestion, batch, speed, serving, and consumption components. The solution will be deployed using Docker Compose, with the main components running in containers to simplify setup and integration. Figure~\ref{fig:lambda-architecture} shows the proposed technologies and their main connections.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\linewidth,height=0.8\textheight,keepaspectratio]{lambda_architecture.png}
     \caption{Proposed technology architecture based on the Lambda model.}
-    \label{fig:lambda-infrastructure}
+    \label{fig:lambda-architecture}
 \end{figure}
 
-\subsection{Ingestion infrastructure}
+\subsection{Ingestion Layer}
 
-\textbf{Apache NiFi} will coordinate data collection from the external APIs. It will store raw copies of the collected observations and timetables in HDFS for historical processing, while forwarding live observations to \textbf{Apache Kafka}. Kafka will provide separate topics for GPS, weather, and air quality data.
+\textbf{Apache NiFi} will manage API requests and data ingestion. It will save raw observations and timetables in HDFS and send live GPS, weather, and air quality records to \textbf{Apache Kafka}. Kafka will organise the incoming records into separate topics for the stream processing application.
 
-\subsection{Batch layer infrastructure}
+\subsection{Batch Layer}
 
-\textbf{Hadoop HDFS} will be the main historical storage system, holding Raw, Cleaned, and Processed datasets, timetable snapshots, and trained models. \textbf{Apache Spark} will perform batch transformations, source integration, and aggregation. \textbf{Hive Metastore} will store table definitions for the cleaned and processed files in HDFS, allowing Spark SQL to access the datasets as structured tables.
-\textbf{Spark MLlib} will be used to train and evaluate the prediction model using historical features prepared by Spark. The trained model will be stored in HDFS and made available to the speed layer.
+\textbf{Hadoop HDFS} will store raw, cleaned, and processed data, as well as timetable snapshots and trained models. \textbf{Apache Spark} will clean and combine historical records, prepare datasets, and calculate aggregates. \textbf{Hive Metastore} will maintain table definitions for datasets stored in HDFS, allowing them to be accessed through Spark SQL.
 
-\subsection{Speed layer infrastructure}
+\textbf{Spark MLlib} will be used to train and evaluate the delay prediction model. The model will be saved in HDFS and made available to the speed layer.
 
-\textbf{Spark Structured Streaming} will consume events from Kafka and process current observations. It will enrich them with the timetable prepared by the batch layer, calculate current features, and generate predictions using the saved \textbf{Spark MLlib} model. The predictions and other current results will be written to Cassandra.
+\subsection{Speed Layer}
 
-\subsection{Serving and dashboard infrastructure}
+\textbf{Apache Spark Structured Streaming} will read events from Kafka and process current observations. It will use the latest timetable and the trained \textbf{Spark MLlib} model to calculate delays and generate predictions. Current observations, statistics, and predictions will be saved to Cassandra.
 
-\textbf{Apache Cassandra} will store current data and predictions from the speed layer together with selected historical aggregates and model evaluation metrics from the batch layer. \textbf{Streamlit} will provide the interactive dashboard and retrieve the information needed for its visualisations from Cassandra.
+\subsection{Serving Layerand Dashboard }
 
-\subsection{Deployment}
-
-The initial solution will be deployed using \textbf{Docker Compose}, with the main technologies running as containerised services. This arrangement will simplify development and integration of the individual project components.
+\textbf{Apache Cassandra} will store current information from the speed layer and selected historical aggregates from the batch layer. \textbf{Streamlit} will provide a dashboard that reads these results from Cassandra and presents them through interactive visualisations.
 
 \section{Use of Artificial Intelligence}
 
