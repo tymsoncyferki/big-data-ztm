@@ -28,9 +28,24 @@
 \usepackage{graphicx}
 \usepackage{amssymb}
 \usepackage{multirow}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta}
+
+% stick figure actor for use case diagrams: #1 = node name, #2 = position, #3 = label
+\newcommand{\actor}[3]{
+    \begin{scope}[shift={(#2)}]
+        \draw (0,0.95) circle (0.2);
+        \draw (0,0.75) -- (0,0.2);
+        \draw (-0.35,0.55) -- (0.35,0.55);
+        \draw (0,0.2) -- (-0.25,-0.25);
+        \draw (0,0.2) -- (0.25,-0.25);
+        \node[below, align=center] at (0,-0.3) {#3};
+        \node[inner sep=0pt, minimum width=0.8cm, minimum height=1.5cm] (#1) at (0,0.4) {};
+    \end{scope}
+}
 
 \title{
-    \textbf{Big Data Solution for Warsaw Public Transit delay prediction -  Milestone 1 report} \\[0.5cm]
+    \textbf{Big Data Solution for Warsaw Public Transit delay prediction - Milestone 1 report} \\[0.5cm]
     \large Big Data Analytics
 }
 \author{Emil Łasocha \and Michał Szewczak \and Sebastian Trojan \and Tymoteusz Urban}
@@ -40,6 +55,117 @@
 
 \maketitle
 \newpage
+\section{Description}
+
+The goal of the project is to build a system that shows current delays in Warsaw's public transport, how it will probably be delayed in the near future, and how these delays depend on weather and air conditions. The system will collect live positions of buses and trams, timetables, weather data and air quality data published by the city. By comparing the real position of a vehicle with its timetable we can calculate its delay. Then this information is combined with current weather and used both for live monitoring and for training a machine learning model that predicts delays.
+
+Weather is an obvious candidate for a factor that affects delays, because rain, snow or ice make traffic slower. Air quality is less obvious, but we expect some correlation with delays, since heavy traffic both slows down buses and makes the air quality worse. One of the goals of the project is to check how strong these relations really are.
+
+From the user perspective, the final product is a web dashboard which presents current delays, predicted delays and historical statistics in a simple form.
+
+\section{Project Deliverables and User Benefits}
+
+\subsection{Target users}
+
+We identified three main groups of users of the system:
+\begin{itemize}
+    \item \textbf{Passenger} - a person who travels by bus or tram in Warsaw and wants to know if their line is on time and what delay to expect, especially in bad weather.
+    \item \textbf{Dispatcher} - a person working for the transport operator who watches the whole network during the day and needs to react quickly when delays start to grow.
+    \item \textbf{Transport planner / analyst} - a person who works on timetables and the transport network in the long term and wants to understand where and why delays appear.
+\end{itemize}
+
+\subsection{Deliverables}
+
+After finishing the project, the users will get access to the following features:
+\begin{itemize}
+    \item \textbf{Live delay monitoring} - current position and delay of vehicles, which can be filtered by line or stop, and a map of the network with delays marked on it. Next to the delay information, the dashboard also shows current weather and air quality measured by stations located in the city.
+    \item \textbf{Delay prediction} - predicted delay of a given line at a given stop for the near future, calculated by a machine learning model working on streaming data and taking into account current weather and air quality. Based on the predictions, the dashboard also shows alerts with a list of lines and areas where the predicted delay is higher than a chosen threshold, so problems can be noticed beforehand.
+    \item \textbf{Historical statistics and weather impact analysis} - average delays by line, stop, hour of the day, day of the week and weather conditions, calculated with batch processing on all collected data. This also includes a comparison of delays in different weather conditions (for example dry vs. rainy days) and a list of lines and stops which are most sensitive to bad weather.
+\end{itemize}
+
+\subsection{Use cases}
+
+The use case diagram of the system is presented in Figure~\ref{fig:use_cases}, and short descriptions of each use case are given in Table~\ref{tab:use_cases}.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    usecase/.style={draw, ellipse, inner sep=0pt, minimum width=4cm, minimum height=1.3cm, text width=2.9cm, align=center, font=\footnotesize},
+    assoc/.style={thin},
+    every node/.append style={font=\footnotesize}
+]
+    % system boundary
+    \draw[rounded corners] (3.6,3.7) rectangle (12.9,13.7);
+    \node[anchor=north, font=\small\bfseries] at (8.25,13.65) {Warsaw Transit Delay System};
+
+    % use cases for passengers and dispatchers
+    \node[usecase] (uc3) at (6,12) {UC3: View current weather and air quality};
+    \node[usecase] (uc1) at (6,10.2) {UC1: Check current delay of a line or stop};
+    \node[usecase] (uc2) at (6,8.4) {UC2: Check predicted delay at a stop};
+    \node[usecase] (uc4) at (6,6.6) {UC4: View map of delays in the network};
+    \node[usecase] (uc5) at (6,4.8) {UC5: Receive alerts about high predicted delays};
+
+    % use cases for planners
+    \node[usecase] (uc6) at (10.5,12) {UC6: Browse historical delay statistics};
+    \node[usecase] (uc7) at (10.5,10.2) {UC7: Compare delays in different weather conditions};
+    \node[usecase] (uc8) at (10.5,8.4) {UC8: Find lines and stops sensitive to weather};
+    \node[usecase] (uc9) at (10.5,6.6) {UC9: Check prediction model quality};
+
+    % actors
+    \actor{pas}{0,10}{Passenger}
+    \actor{dis}{0,5.6}{Dispatcher}
+    \actor{pla}{15.6,9}{Transport planner /\\ analyst}
+
+    % associations
+    \draw[assoc] (pas.east) -- (uc3.west);
+    \draw[assoc] (pas.east) -- (uc1.west);
+    \draw[assoc] (pas.east) -- (uc2.west);
+    \draw[assoc] (dis.east) -- (uc2.west);
+    \draw[assoc] (dis.east) -- (uc4.west);
+    \draw[assoc] (dis.east) -- (uc5.west);
+    \draw[assoc] (pla.west) -- (uc6.east);
+    \draw[assoc] (pla.west) -- (uc7.east);
+    \draw[assoc] (pla.west) -- (uc8.east);
+    \draw[assoc] (pla.west) -- (uc9.east);
+
+    % extend relation
+    \draw[dashed, -{Stealth}] (uc7.north) -- node[right, font=\scriptsize] {$\ll$extend$\gg$} (uc6.south);
+\end{tikzpicture}%
+}
+\caption{Use case diagram of the system}
+\label{fig:use_cases}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Description of use cases}
+\label{tab:use_cases}
+\begin{tabular}{p{0.06\textwidth} p{0.22\textwidth} p{0.14\textwidth} p{0.48\textwidth}}
+\toprule
+\textbf{ID} & \textbf{Name} & \textbf{Actor} & \textbf{Description} \\
+\midrule
+UC1 & Check current delay of a line or stop & Passenger & The user selects a line or a stop and sees the current delay of vehicles, calculated from live GPS data and the timetable. \\
+UC2 & Check predicted delay at a stop & Passenger, Dispatcher & The user selects a line and a stop and gets a predicted delay for the near future, generated by the ML model using live transit and weather data. \\
+UC3 & View current weather and air quality & Passenger & The user sees current temperature, precipitation, wind, visibility and air quality in different parts of the city. \\
+UC4 & View map of delays in the network & Dispatcher & The user sees a map with current vehicle positions coloured by their delay, which helps to quickly find problematic areas. \\
+UC5 & Receive alerts about high predicted delays & Dispatcher & The dashboard shows a list of lines where the predicted delay is above a chosen threshold. \\
+UC6 & Browse historical delay statistics & Planner & The user browses average delays by line, stop, hour and day of the week, calculated in batch mode on all collected data. \\
+UC7 & Compare delays in different weather conditions & Planner & An extension of UC6, where the user filters the statistics by weather conditions (e.g. rain, snow, low temperature) and compares the results. \\
+UC8 & Find lines and stops sensitive to weather & Planner & The user gets a ranking of lines and stops where delays grow the most in bad weather. \\
+UC9 & Check prediction model quality & Planner & The user sees evaluation metrics of the model (e.g. mean absolute error of predicted delay) and how they change over time. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Benefits for the users}
+
+\textbf{Passengers} will be able to plan their trips better. Instead of only seeing the timetable, they will know the current and the expected delay of their line, and they will see when bad weather is likely to make travel longer. This can help them decide to leave home earlier or choose a different line.
+
+\textbf{Dispatchers} will get one place where they can see the whole network, current delays and predicted problems. Thanks to the predictions and alerts they can react earlier, for example by sending an additional vehicle or informing passengers, instead of reacting only after the delay has already grown.
+
+\textbf{Transport planners and analysts} will get access to historical data that is already cleaned and combined with weather data. This makes it possible to find lines and stops which are regularly late or which are especially affected by bad weather, and to use this knowledge when planning timetables, for example by adding extra time on some routes during winter.
+
 \section{Datasources}
 Data used in the project will be obtained from data published by the city of Warsaw through its open data APIs, available at
 (\texttt{https://dane.um.warszawa.pl}), but with multiple endpoints of both streaming and batch nature. Polled data is returned in json format for all endpoints available. All data size estimations where aquired using models available in Gemini free tier.
