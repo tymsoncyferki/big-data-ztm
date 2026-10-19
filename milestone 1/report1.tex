@@ -54,10 +54,10 @@
 \begin{document}
 
 \maketitle
-\newpage
+% \newpage
 \section{Description}
 
-The goal of the project is to build a system that shows current delays in Warsaw's public transport, how it will probably be delayed in the near future, and how these delays depend on weather and air conditions. The system will collect live positions of buses and trams, timetables, weather data and air quality data published by the city. By comparing the real position of a vehicle with its timetable we can calculate its delay. Then this information is combined with current weather and used both for live monitoring and for training a machine learning model that predicts delays.
+The goal of the project is to build a system that shows current delays in Warsaw's public transport, how they will change in the near future, and how these delays depend on weather and air conditions. The system will collect live positions of buses and trams, timetables, weather data and air quality data published by the city. By comparing the real position of a vehicle with its timetable we can calculate its delay. Then this information is combined with current weather and used both for live monitoring and for training a machine learning model that predicts delays.
 
 Weather is an obvious candidate for a factor that affects delays, because rain, snow or ice make traffic slower. Air quality is less obvious, but we expect some correlation with delays, since heavy traffic both slows down buses and makes the air quality worse. One of the goals of the project is to check how strong these relations really are.
 
@@ -158,6 +158,7 @@ UC9 & Check prediction model quality & Planner & The user sees evaluation metric
 \end{tabular}
 \end{table}
 
+\newpage
 \subsection{Benefits for the users}
 
 \textbf{Passengers} will be able to plan their trips better. Instead of only seeing the timetable, they will know the current and the expected delay of their line, and they will see when bad weather is likely to make travel longer. This can help them decide to leave home earlier or choose a different line.
