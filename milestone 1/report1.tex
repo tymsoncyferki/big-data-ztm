@@ -91,7 +91,7 @@ The use case diagram of the system is presented in Figure~\ref{fig:use_cases}, a
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-    usecase/.style={draw, ellipse, inner sep=0pt, minimum width=4cm, minimum height=1.3cm, text width=2.9cm, align=center, font=\footnotesize},
+    usecase/.style={draw, ellipse, inner sep=0pt, minimum width=4cm, minimum height=1.3cm, text width=2.9cm, align=center, font=\footnotesize, execute at begin node={\hyphenpenalty=10000}},
     assoc/.style={thin},
     every node/.append style={font=\footnotesize}
 ]
@@ -141,7 +141,7 @@ The use case diagram of the system is presented in Figure~\ref{fig:use_cases}, a
 \centering
 \caption{Description of use cases}
 \label{tab:use_cases}
-\begin{tabular}{p{0.06\textwidth} p{0.22\textwidth} p{0.14\textwidth} p{0.48\textwidth}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.06\textwidth} >{\raggedright\arraybackslash}p{0.22\textwidth} >{\raggedright\arraybackslash}p{0.14\textwidth} >{\raggedright\arraybackslash}p{0.47\textwidth}}
 \toprule
 \textbf{ID} & \textbf{Name} & \textbf{Actor} & \textbf{Description} \\
 \midrule
@@ -168,16 +168,16 @@ UC9 & Check prediction model quality & Planner & The user sees evaluation metric
 
 \section{Datasources}
 Data used in the project will be obtained from data published by the city of Warsaw through its open data APIs, available at
-(\texttt{https://dane.um.warszawa.pl}), but with multiple endpoints of both streaming and batch nature. Polled data is returned in json format for all endpoints available. All data size estimations where aquired using models available in Gemini free tier.
+(\texttt{https://dane.um.warszawa.pl}), but with multiple endpoints of both streaming and batch nature. Polled data is returned in json format for all endpoints available. All data size estimations were acquired using models available in Gemini free tier.
 \subsection{Streaming data}
 \begin{itemize}
 
   \item \textbf{Vehicle position data} - live GPS
     pings for every active vehicle: \texttt{Lat}, \texttt{Lon}, \texttt{Time},
-    \texttt{Lines}, texttt{Brigade}, \texttt{VehicleNumber}. During rush hour there are about 450 trams and 1400 buses deployed, and such information is refreshed every 10s, though we would probably poll it in larger intervals, in order not to overload our limited infrastructure and not to exceed potential rate-limiting. A result of single poll has estimated size of 200KB.
+    \texttt{Lines}, \texttt{Brigade}, \texttt{VehicleNumber}. During rush hour there are about 450 trams and 1400 buses deployed, and such information is refreshed every 10s, though we would probably poll it in larger intervals, in order not to overload our limited infrastructure and not to exceed potential rate-limiting. A result of single poll has estimated size of 200KB.
   \item \textbf{Weather data} - air and surface temperature,
-    precipitation,humidity, wind, and visibility for 18 stations located throughout the city. This data is refreshed every 10 minutes, though in order to use it as a streaming data source it is possible to poll it in shorter intervals for this puprose. A result of a single poll is estimated size of 4KB.
-     \item \textbf{Air quality data} - returns a json with short description, monitoring station parameters, including type and location, and air quality parameters in form of nested records for 108 stations located throughout the city. This data is refreshed every 10 minutes, though in order to use it as a streaming data source it is possible to poll it in shorter intervals for this puprose. A result of a single poll is estimated size of 120KB.
+    precipitation, humidity, wind, and visibility for 18 stations located throughout the city. This data is refreshed every 10 minutes, though in order to use it as a streaming data source it is possible to poll it in shorter intervals for this purpose. A result of a single poll is estimated size of 4KB.
+     \item \textbf{Air quality data} - returns a json with short description, monitoring station parameters, including type and location, and air quality parameters in form of nested records for 108 stations located throughout the city. This data is refreshed every 10 minutes, though in order to use it as a streaming data source it is possible to poll it in shorter intervals for this purpose. A result of a single poll is estimated size of 120KB.
 \end{itemize}
 \subsection{Batch data}
 \begin{itemize}
@@ -205,7 +205,7 @@ The system will collect three types of stream data: vehicle GPS positions, weath
 
 The batch path will use the historical data stored in HDFS. Processing will produce three groups of datasets: \textbf{Raw}, containing the original source records; \textbf{Cleaned}, containing standardised and validated data; and \textbf{Processed}, containing integrated data and analytical results. The cleaned and processed datasets will be stored in Parquet format.
 
-Historical GPS observations will be combined with timetables and environmental measurements to estimate delays and prepare features for machine learning. The batch path will also calculate statistics such as average delays by line, stop, and time period. These datasets will remain available in HDFS, while selected aggregates will be transferred to the serving layer.
+Historical GPS observations will be combined with timetables and environmental measurements to estimate delays and prepare features for machine learning. The batch path will also calculate statistics such as average delays by line, stop, time period, and weather conditions. These datasets will remain available in HDFS, while selected aggregates will be transferred to the serving layer.
 
 A prediction model will be trained and evaluated using the processed historical data. The resulting model will be saved in HDFS for use by the stream path. The batch path will also make the latest processed timetable available for real-time calculations.
 
@@ -237,7 +237,6 @@ The system will use open-source Big Data technologies organised into ingestion, 
 \subsection{Batch layer infrastructure}
 
 \textbf{Hadoop HDFS} will be the main historical storage system, holding Raw, Cleaned, and Processed datasets, timetable snapshots, and trained models. \textbf{Apache Spark} will perform batch transformations, source integration, and aggregation. \textbf{Hive Metastore} will store table definitions for the cleaned and processed files in HDFS, allowing Spark SQL to access the datasets as structured tables.
-
 \textbf{Spark MLlib} will be used to train and evaluate the prediction model using historical features prepared by Spark. The trained model will be stored in HDFS and made available to the speed layer.
 
 \subsection{Speed layer infrastructure}
@@ -246,7 +245,7 @@ The system will use open-source Big Data technologies organised into ingestion, 
 
 \subsection{Serving and dashboard infrastructure}
 
-\textbf{Apache Cassandra} will store current data and predictions from the speed layer together with selected historical aggregates from the batch layer. \textbf{Streamlit} will provide the interactive dashboard and retrieve the information needed for its visualisations from Cassandra.
+\textbf{Apache Cassandra} will store current data and predictions from the speed layer together with selected historical aggregates and model evaluation metrics from the batch layer. \textbf{Streamlit} will provide the interactive dashboard and retrieve the information needed for its visualisations from Cassandra.
 
 \subsection{Deployment}
 
@@ -275,7 +274,7 @@ The project work is divided among four team members, each responsible for a spec
     \item Selecting and testing the weather API and public transport data source.
     \item Creating scripts in order to retrieve data from external APIs.
     \item Configuring Apache NiFi to automate the data ingestion process.
-    \item Configuring Apache Kafka topics, such as \texttt{weather} and \texttt{buses}.
+    \item Configuring Apache Kafka topics, such as \texttt{gps}, \texttt{weather} and \texttt{air\_quality}.
     \item Implementing data validation, error handling and duplicate detection.
     \item Defining and documenting data schemas.
     \item Documenting the data collection process.
@@ -312,8 +311,8 @@ The project work is divided among four team members, each responsible for a spec
 
 \subsection{Results Serving, Dashboard, and System Integration}
 
-\textbf{Main responsible person: Sebastian}, supporting team member: Tymoteusz
-.\begin{itemize}
+\textbf{Main responsible person: Sebastian}, supporting team member: Tymoteusz.
+\begin{itemize}
     \item Configuring a database and creating tables for analytical results and predictions.
     \item Defining common data formats and interfaces with the other team members.
     \item Integrating the results of batch and stream processing.
