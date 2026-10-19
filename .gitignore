@@ -219,9 +219,11 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-/milestone 1/report1.aux
-/milestone 1/report1.log
-/milestone 1/report1.run.xml
+# custom
+/milestone 1/report1.*
+!/milestone 1/report1.pdf
+!/milestone 1/report1.tex
 /milestone 1/report1-blx.bib
-/milestone 1/report1.synctex.gz
 .idea/
+/local
+CLAUDE.md
