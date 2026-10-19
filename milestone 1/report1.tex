@@ -18,6 +18,10 @@
 \newcommand{\relu}{\operatorname{ReLU}}
 \newcommand{\sigmoid}{\operatorname{\sigma}}
 
+% big tick = main responsible person, small tick = supporting team member
+\newcommand{\mainresp}{{\LARGE$\checkmark$}}
+\newcommand{\suppresp}{{\footnotesize$\checkmark$}}
+
 \usepackage[backend=bibtex, style=ieee]{biblatex}
 %\addbibresource{bibliography.bib}
 
@@ -365,6 +369,47 @@ The planned uses of AI include:
 AI will serve as a supporting tool rather than a replacement for the team's own work. All team members will remain responsible for understanding, validating, and maintaining the code and documentation they produce.
 
 \section{Division of Responsibilities}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Distribution of responsibilities among team members}
+\label{tab:responsibilities}
+\begin{tabular}{>{\raggedright\arraybackslash}p{7.2cm} c c c c}
+\toprule
+\textbf{Responsibility} & \textbf{Emil} & \textbf{Michał} & \textbf{Sebastian} & \textbf{Tymoteusz} \\
+\midrule
+1. API access, Apache NiFi ingestion
+   &  & \mainresp & \suppresp &  \\
+2. Kafka topics and data validation
+   &  & \mainresp & \suppresp &  \\
+3. Data schemas and interfaces (HDFS paths, Kafka topics, Cassandra tables)
+   & \suppresp & \suppresp & \mainresp & \suppresp \\
+4. HDFS, Hive Metastore, directory structure and data cleaning (Parquet)
+   & \mainresp & \suppresp &  &  \\
+5. Delay estimation and feature definitions shared by batch and stream paths
+   & \mainresp &  &  & \suppresp \\
+6. Batch processing: unified dataset, historical statistics and weather-sensitivity ranking
+   & \mainresp & \suppresp &  &  \\
+7. ML model training, evaluation and saving the model in HDFS
+   & \mainresp &  &  & \suppresp \\
+8. Spark Structured Streaming: Kafka consumption, enrichment, live delays and predictions
+   & \suppresp &  &  & \mainresp \\
+9. Live delays and predictions
+   & \suppresp &  &  & \mainresp \\
+10. Cassandra tables and writing/exporting results from batch and stream processing
+   & \suppresp &  & \mainresp & \suppresp \\
+11. Streamlit dashboard (map, alerts, weather impact analysis, model quality)
+   &  &  & \mainresp & \suppresp \\
+12. Docker Compose integration, system testing and run documentation
+   & \suppresp & \suppresp & \mainresp & \suppresp \\
+\bottomrule
+\end{tabular}
+
+\vspace{2mm}
+\footnotesize
+{\Large$\checkmark$} -- main responsible person, \quad {\footnotesize$\checkmark$} -- supporting team member
+\end{table}
 
 The project work is divided among four team members, each responsible for a specific component of the system and supported by another team member.
 
