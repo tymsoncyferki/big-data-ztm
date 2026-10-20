@@ -309,8 +309,8 @@ Data used in the project will be obtained from data published by the city of War
     pings for every active vehicle: \texttt{Lat}, \texttt{Lon}, \texttt{Time},
     \texttt{Lines}, \texttt{Brigade}, \texttt{VehicleNumber}. During rush hour there are about 450 trams and 1400 buses deployed, and such information is refreshed every 10s, though we would probably poll it in larger intervals, in order not to overload our limited infrastructure and not to exceed potential rate-limiting. A result of single poll has estimated size of 200KB.
   \item \textbf{Weather data} - air and surface temperature,
-    precipitation, humidity, wind, and visibility for 18 stations located throughout the city. This data is refreshed every 10 minutes, though in order to use it as a streaming data source it is possible to poll it in shorter intervals for this purpose. A result of a single poll is estimated size of 4KB.
-     \item \textbf{Air quality data} - returns a json with short description, monitoring station parameters, including type and location, and air quality parameters in form of nested records for 108 stations located throughout the city. This data is refreshed every 10 minutes, though in order to use it as a streaming data source it is possible to poll it in shorter intervals for this purpose. A result of a single poll is estimated size of 120KB.
+    precipitation, humidity, wind, and visibility for 18 stations located throughout the city. This data is refreshed every 10 minutes. A result of a single poll is estimated size of 4KB.
+     \item \textbf{Air quality data} - returns a json with short description, monitoring station parameters, including type and location, and air quality parameters in form of nested records for 108 stations located throughout the city. This data is refreshed every 10 minutes. A result of a single poll is estimated size of 120KB.
 \end{itemize}
 \subsection{Batch data}
 \begin{itemize}
@@ -318,6 +318,10 @@ Data used in the project will be obtained from data published by the city of War
     stop locations, line-stop assignments, and per-brigade precise schedules
     for every  stop-line-brigade combination in the network. This data daily (assuming daily batches) estimated size is at 140-200MB.
 \end{itemize}
+\subsection{Data Challenges}
+Weather and air quality measurements are updated only every 10 minutes, which is too infrequent to treat them as continuous streaming data sources. In contrast, vehicle GPS positions are updated approximately every 10 seconds.
+To address this limitation, we plan to simulate continuous environmental data streams by interpolating measurements within 10-minute intervals. GPS observations will be buffered for the same period to keep the data streams synchronised.
+
 
 \section{Data Processing Steps}
 
@@ -332,7 +336,7 @@ The proposed solution is based on the Lambda Architecture, which combines the pr
 
 \subsection{Data Ingestion}
 
-The system will collect three types of stream data: vehicle GPS positions, weather measurements, and air quality measurements. Public transport timetables will form a separate batch source, refreshed approximately once per day. The ingestion component will retrieve and validate data from the corresponding APIs. Original responses from all four sources will be stored in HDFS. Incoming GPS and environmental observations will also be forwarded to Kafka for stream processing.
+The system will collect three types of stream data: vehicle GPS positions, weather measurements, and air quality measurements. Public transport timetables will form a separate batch source, refreshed approximately once per day. A separate Python module will buffer GPS observations for 10 minutes and interpolate weather and air quality measurements within the corresponding windows. It will send synchronised streams to the ingestion component, while timetable data will be retrieved separately. The ingestion component will validate incoming data and store raw records in HDFS. GPS and environmental observations will also be forwarded to Kafka for stream processing.
 
 \subsection{Batch Processing}
 
@@ -344,7 +348,7 @@ A prediction model will be trained and evaluated using the processed historical 
 
 \subsection{Stream Processing}
 
-The stream path will receive GPS, weather, and air quality events from Kafka. Current vehicle positions will be combined with environmental measurements and the latest processed timetable. The system will estimate current delays, prepare model features, and use the model trained in the batch path to predict future delays.
+The stream path will receive synchronised GPS, weather, and air quality events from Kafka. Current vehicle positions will be combined with environmental measurements and the latest processed timetable. The system will estimate current delays, prepare model features, and use the model trained in the batch path to predict future delays.
 
 Current vehicle positions, environmental measurements, estimated delays, predictions, and real-time statistics will be written to Cassandra.
 
@@ -365,7 +369,7 @@ The system will use open-source Big Data technologies organised into ingestion, 
 
 \subsection{Ingestion Layer}
 
-\textbf{Apache NiFi} will manage API requests and data ingestion. It will save raw observations and timetables in HDFS and send live GPS, weather, and air quality records to \textbf{Apache Kafka}. Kafka will organise the incoming records into separate topics for the stream processing application.
+A separate \textbf{Python simulation module} will buffer GPS observations for 10 minutes and interpolate weather and air quality measurements to create synchronised streams. The module will run before NiFi and outside the main application. \textbf{Apache NiFi} will receive the simulated streams and retrieve daily timetables. It will save raw observations and timetables in HDFS and forward GPS, weather, and air quality events to \textbf{Apache Kafka}. Kafka will organise the incoming records into separate topics for the stream processing application.
 
 \subsection{Batch Layer}
 
@@ -404,7 +408,7 @@ AI will serve as a supporting tool rather than a replacement for the team's own 
 \toprule
 \textbf{Responsibility} & \textbf{Emil} & \textbf{Michał} & \textbf{Sebastian} & \textbf{Tymoteusz} \\
 \midrule
-1. API access, Apache NiFi ingestion
+1. API access, Python stream simulation and Apache NiFi ingestion
    &  & \mainresp & \suppresp &  \\
 2. Kafka topics and data validation
    &  & \mainresp & \suppresp &  \\
@@ -445,6 +449,7 @@ The project work is divided among four team members, each responsible for a spec
 \begin{itemize}
     \item Selecting and testing the Warsaw open data API endpoints for vehicle positions, weather, air quality and timetables.
     \item Creating scripts in order to retrieve data from external APIs.
+    \item Implementing a Python simulation module for 10-minute GPS buffering and interpolation of weather and air quality measurements.
     \item Configuring Apache NiFi to automate the data ingestion process, including daily retrieval of timetables.
     \item Storing raw copies of all collected data in HDFS (Raw layer).
     \item Configuring Apache Kafka topics, such as \texttt{gps}, \texttt{weather} and \texttt{air\_quality}.
@@ -452,7 +457,7 @@ The project work is divided among four team members, each responsible for a spec
     \item Defining and documenting data schemas.
     \item Documenting the data collection process.
 \end{itemize}
-\textbf{Expected outcome:} A working data ingestion pipeline that retrieves and validates data, archives raw data in HDFS and delivers live data to Apache Kafka.
+\textbf{Expected outcome:} A working data ingestion pipeline that retrieves and validates data, archives raw data in HDFS and delivers live data to Apache Kafka, with a separate Python module for buffering GPS observations and interpolating weather and air quality measurements.
 
 \subsection{Data Storage and Batch Processing}
 
