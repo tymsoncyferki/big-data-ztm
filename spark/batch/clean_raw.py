@@ -257,7 +257,8 @@ def clean_air_quality(frame: DataFrame) -> DataFrame:
         & F.col("event_time_utc").isNotNull()
         & F.col("value").isNotNull()
         & ~F.isnan("value")
-        & (F.col("value") >= 0)
+        # all values should be positive except temperature T which can be negative
+        & ((F.col("value") >= 0) | (F.col("param_code") == "T"))
     )
     return deterministic_dedup(
         result, DEDUP_KEYS["air_quality"]

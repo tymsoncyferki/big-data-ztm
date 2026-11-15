@@ -194,9 +194,13 @@ class SourceHistory:
             if not name:
                 continue
             # 'ijp' is an observed categorical index, not interpolatable.
-            self.air_station_metadata[name] = {
+            metadata = {
                 k: v for k, v in station.items() if k not in {"data", "ijp"}
             }
+            # some stations (GIOS) send coordinates as strings e.g. "52.219298" so we need to convert them
+            metadata["lat"] = numeric(station.get("lat"))
+            metadata["lon"] = numeric(station.get("lon"))
+            self.air_station_metadata[name] = metadata
             for reading in station.get("data") or []:
                 if not isinstance(reading, dict):
                     continue
