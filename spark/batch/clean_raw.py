@@ -184,11 +184,12 @@ def clean_gps(frame: DataFrame) -> DataFrame:
         & F.col("service_date").isNotNull()
         & F.col("event_time_utc").isNotNull()
     )
+    # The source sends bearing in the -180..180 range, so convert it to 0..360.
     result = result.withColumn(
         "bearing",
         F.when(
-            F.col("bearing").between(0, 360) & ~F.isnan("bearing"),
-            F.col("bearing"),
+            F.col("bearing").between(-360, 360) & ~F.isnan("bearing"),
+            F.pmod(F.col("bearing"), F.lit(360.0)),
         ).otherwise(F.lit(None).cast("double")),
     )
     return deterministic_dedup(
