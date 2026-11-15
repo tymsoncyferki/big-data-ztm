@@ -1,86 +1,107 @@
 #!/usr/bin/env bash
-# Start the complete infrastructure and import NiFi flows.
-# Data acquisition is opt-in: --with-data.
+# Start all infrastructure, run one batch, and independently toggle data/schedule.
+# Host requirements: Bash + Docker Compose. No host Python, cron or flock.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 usage() {
   cat <<'USAGE'
-Usage: bash scripts/bootstrap.sh [--no-data | --with-data]
+Usage: bash scripts/bootstrap.sh [--with-data | --no-data] [--with-schedule | --no-schedule]
+  --with-data       Enable simulator and daily GTFS; download GTFS immediately if HDFS is empty.
+  --no-data         (default) Stop simulator and the NiFi GTFS download schedule.
+  --with-schedule   Start the Docker batch scheduler (every 15 minutes).
+  --no-schedule     (default) Stop the optional Docker batch scheduler.
 
-  (no flag) / --no-data   Start NiFi, HDFS and Kafka; import configuration.
-                          Do NOT start the Python simulator.
-  --with-data             Do all of the above, then start Python simulator
-                          (GPS/weather/air-quality API acquisition).
-
-The GTFS daily 03:00 schedule configured in NiFi is unchanged in BOTH modes.
+Always starts HDFS, Kafka, NiFi and Hive, initializes tables and NiFi flows,
+and runs one incremental batch. Optional services can be toggled later using
+scripts/start-data.sh, stop-data.sh, start-schedule.sh, stop-schedule.sh.
 USAGE
 }
 
-MODE="no-data"
-if [[ $# -gt 1 ]]; then usage >&2; exit 2; fi
-case "${1:---no-data}" in
-  --no-data) MODE="no-data" ;;
-  --with-data) MODE="with-data" ;;
-  -h|--help) usage; exit 0 ;;
-  *) usage >&2; exit 2 ;;
-esac
+data_mode=no-data
+schedule_mode=no-schedule
+seen_data=0
+seen_schedule=0
+for flag in "$@"; do
+  case "$flag" in
+    --with-data|--no-data)
+      if (( seen_data )); then echo 'Specify at most one data flag.' >&2; exit 2; fi
+      data_mode="${flag#--}"; seen_data=1 ;;
+    --with-schedule|--no-schedule)
+      if (( seen_schedule )); then echo 'Specify at most one schedule flag.' >&2; exit 2; fi
+      schedule_mode="${flag#--}"; seen_schedule=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
 
-if [[ ! -f .env ]]; then
-  echo 'Missing .env: run `cp .env.example .env` and set your credentials.' >&2
-  exit 1
-fi
+[[ -f .env ]] || { echo 'Missing .env: copy .env.example and set secrets.' >&2; exit 1; }
 set -a
 # shellcheck disable=SC1091
 source .env
 set +a
-for var in NIFI_USERNAME NIFI_PASSWORD NIFI_SENSITIVE_PROPS_KEY; do
-  value="${!var:-}"
+require_secret() {
+  local value="${!1:-}"
   if [[ -z "$value" || "$value" == REPLACE_* ]]; then
-    echo "Set $var to a real value in .env." >&2
-    exit 1
+    echo "Set $1 to a non-placeholder value in .env." >&2; exit 1
   fi
+}
+for name in NIFI_USERNAME NIFI_PASSWORD NIFI_SENSITIVE_PROPS_KEY HIVE_DB_PASSWORD; do
+  require_secret "$name"
 done
 if [[ ${#NIFI_PASSWORD} -lt 12 || ${#NIFI_SENSITIVE_PROPS_KEY} -lt 12 ]]; then
-  echo 'NIFI_PASSWORD and NIFI_SENSITIVE_PROPS_KEY must have at least 12 characters.' >&2
-  exit 1
+  echo 'NIFI_PASSWORD and NIFI_SENSITIVE_PROPS_KEY must be at least 12 characters.' >&2; exit 1
 fi
-if [[ "$MODE" == "with-data" ]]; then
-  if [[ -z "${WEATHER_API_TOKEN:-}" || "${WEATHER_API_TOKEN}" == REPLACE_* ]]; then
-    echo 'Set WEATHER_API_TOKEN in .env before using --with-data.' >&2
-    exit 1
-  fi
-fi
+if [[ "$data_mode" == with-data ]]; then require_secret WEATHER_API_TOKEN; fi
 
 compose=(docker compose -f docker-compose.yml)
-
-echo 'Starting NiFi, HDFS and Kafka (simulator is opt-in)...'
-"${compose[@]}" up -d --build
-
-echo 'Preparing Kafka topics...'
-bash scripts/init-kafka.sh
-
-echo 'Preparing HDFS directories...'
-bash scripts/init-hdfs.sh
-
-echo 'Importing/starting NiFi flows (idempotent on existing portable installation)...'
-NIFI_API_URL=https://localhost:8443/nifi-api \
-  python3 scripts/init-nifi.py
-
-if [[ "$MODE" == "with-data" ]]; then
-  echo 'Starting the Python simulator (GPS 10 s, weather/air 30 s, 15-min buffer)...'
-  "${compose[@]}" --profile ingestion up -d --build --no-deps simulator
-  echo 'Simulator started. Logs: docker compose logs -f simulator'
-else
-  # A second bootstrap with --no-data must not leave a previously started
-  # simulator ingesting data silently. This does not touch NiFi/GTFS.
-  running_simulator="$("${compose[@]}" --profile ingestion ps -q simulator 2>/dev/null || true)"
-  if [[ -n "$running_simulator" ]]; then
-    echo 'Stopping previously running simulator (no-data mode; in-RAM buffer will be lost)...'
-    "${compose[@]}" --profile ingestion stop simulator
+# An old checkout may have installed a host-cron entry. Remove only our marker
+# when crontab happens to exist; cron is not required in this version.
+if command -v crontab >/dev/null 2>&1; then
+  existing="$(crontab -l 2>/dev/null || true)"
+  if grep -Fq '# BIG_DATA_ZTM_BATCH_SCHEDULER' <<<"$existing"; then
+    echo 'Removing legacy host-cron schedule to prevent duplicate executions...'
+    remaining="$(printf '%s\n' "$existing" | grep -vF '# BIG_DATA_ZTM_BATCH_SCHEDULER' || true)"
+    if ! printf '%s\n' "$remaining" | crontab -; then
+      echo 'WARNING: legacy cron entry could not be removed; disable it manually.' >&2
+    fi
   fi
-  echo 'Infrastructure ready, Python simulator NOT started.'
-  echo "To enable acquisition: bash scripts/start-data.sh"
 fi
 
-echo 'NiFi UI: https://localhost:8443/nifi | NameNode UI: http://localhost:9870'
+echo '[1/7] Starting HDFS, Kafka and NiFi...'
+"${compose[@]}" up -d --build
+
+echo '[2/7] Preparing Kafka topics...'
+bash scripts/init-kafka.sh
+
+echo '[3/7] Starting Hive and initializing external tables...'
+bash scripts/start-analytics.sh
+
+echo '[4/7] Importing NiFi flows using containerized Python...'
+"${compose[@]}" --profile tools build nifi-init
+"${compose[@]}" --profile tools run --rm --no-deps nifi-init
+
+if [[ "$data_mode" == with-data ]]; then
+  echo '[5/7] Starting optional data acquisition (simulator + GTFS)...'
+  bash scripts/start-data.sh
+else
+  echo '[5/7] Stopping optional data acquisition...'
+  bash scripts/stop-data.sh
+fi
+
+echo '[6/7] Running one incremental Spark/Hive batch...'
+bash scripts/run-scheduled.sh
+
+if [[ "$schedule_mode" == with-schedule ]]; then
+  echo '[7/7] Starting Docker batch scheduler...'
+  bash scripts/start-schedule.sh
+else
+  echo '[7/7] Stopping optional Docker batch scheduler...'
+  bash scripts/stop-schedule.sh
+fi
+
+echo 'Bootstrap completed.'
+echo 'NiFi: https://localhost:8443/nifi | HDFS: http://localhost:9870'
+echo 'Hive JDBC: jdbc:hive2://localhost:10000/default'
+echo "Simulator: $data_mode | Docker schedule: $schedule_mode"
+echo 'One-off batch: bash scripts/run-scheduled.sh'

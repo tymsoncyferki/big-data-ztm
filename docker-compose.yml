@@ -1,5 +1,6 @@
 # Single Compose project for a fresh, reproducible development environment.
 # The simulator is opt-in via the "ingestion" profile and bootstrap flag.
+# Project name is big-data-ztm; do not mix with a running portable stack.
 name: big-data-ztm
 
 services:
@@ -85,7 +86,7 @@ services:
       NIFI_JVM_HEAP_MAX: "1g"
       TZ: Europe/Warsaw
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Europe/Warsaw"
-      # Accept UI requests from host and REST bootstrap requests from nifi-init container.
+      # Accept browser access and localhost API bootstrap on the host.
       NIFI_WEB_PROXY_HOST: "localhost:8443,nifi:8443"
       SINGLE_USER_CREDENTIALS_USERNAME: "${NIFI_USERNAME:?Set NIFI_USERNAME in .env}"
       SINGLE_USER_CREDENTIALS_PASSWORD: "${NIFI_PASSWORD:?Set NIFI_PASSWORD in .env}"
@@ -106,24 +107,6 @@ services:
       - nifi_state:/opt/nifi/nifi-current/state
     restart: unless-stopped
 
-  # Init flow is invoked explicitly by bootstrap.sh, never by ordinary Compose up.
-  nifi-init:
-    profiles: ["bootstrap"]
-    build:
-      context: .
-      dockerfile: docker/nifi-init/Dockerfile
-    environment:
-      NIFI_API_URL: "https://nifi:8443/nifi-api"
-      NIFI_USERNAME: "${NIFI_USERNAME:?Set NIFI_USERNAME in .env}"
-      NIFI_PASSWORD: "${NIFI_PASSWORD:?Set NIFI_PASSWORD in .env}"
-    volumes:
-      - ./scripts/init-nifi.py:/bootstrap/scripts/init-nifi.py:ro
-      - ./nifi/flows:/bootstrap/nifi/flows:ro
-    depends_on:
-      nifi:
-        condition: service_started
-    restart: "no"
-
   # This service is NOT started by ordinary `docker compose up -d`.
   # Use `bash scripts/bootstrap.sh --with-data` to opt in after NiFi initialization.
   simulator:
@@ -143,6 +126,137 @@ services:
         condition: service_started
     restart: unless-stopped
 
+
+  # Analytics services start during bootstrap (or via start-analytics.sh).
+  hive-db:
+    profiles: ["analytics"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: "${HIVE_DB_PASSWORD:?Set HIVE_DB_PASSWORD in .env}"
+      POSTGRES_DB: metastore_db
+    volumes:
+      - hive_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive -d metastore_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+
+  hive-metastore:
+    profiles: ["analytics"]
+    build:
+      context: .
+      dockerfile: docker/hive/Dockerfile
+    image: big-data-ztm-hive:4.0.1-pg
+    environment:
+      SERVICE_NAME: metastore
+      TZ: UTC
+      DB_DRIVER: postgres
+      HIVE_CUSTOM_CONF_DIR: /hive_custom_conf
+      SERVICE_OPTS: >-
+        -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+        -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://hive-db:5432/metastore_db
+        -Djavax.jdo.option.ConnectionUserName=hive
+        -Djavax.jdo.option.ConnectionPassword=${HIVE_DB_PASSWORD:?Set HIVE_DB_PASSWORD in .env}
+        -Dhive.metastore.warehouse.dir=hdfs://namenode:8020/data/warehouse
+        -Dmetastore.metastore.event.db.notification.api.auth=false
+    volumes:
+      - ./docker/hive/conf:/hive_custom_conf:ro
+    depends_on:
+      hive-db:
+        condition: service_healthy
+      namenode:
+        condition: service_started
+    restart: unless-stopped
+
+  hive-server2:
+    profiles: ["analytics"]
+    image: big-data-ztm-hive:4.0.1-pg
+    environment:
+      SERVICE_NAME: hiveserver2
+      TZ: UTC
+      HIVE_CUSTOM_CONF_DIR: /hive_custom_conf
+      IS_RESUME: "true"
+      SERVICE_OPTS: >-
+        -Dhive.metastore.uris=thrift://hive-metastore:9083
+        -Dhive.metastore.warehouse.dir=hdfs://namenode:8020/data/warehouse
+        -Dhive.execution.engine=mr
+        -Dmapreduce.framework.name=local
+    ports:
+      - "127.0.0.1:10000:10000"
+      - "127.0.0.1:10002:10002"
+    volumes:
+      - ./docker/hive/conf:/hive_custom_conf:ro
+      - ./hive/sql:/opt/hive/project-sql:ro
+    depends_on:
+      hive-metastore:
+        condition: service_started
+    restart: unless-stopped
+
+  # One-off NiFi REST bootstrap; Python and requests stay inside Docker.
+  nifi-init:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: docker/nifi-init/Dockerfile
+    image: big-data-ztm-nifi-init:latest
+    environment:
+      NIFI_API_URL: https://nifi:8443/nifi-api
+      NIFI_USERNAME: "${NIFI_USERNAME:?Set NIFI_USERNAME in .env}"
+      NIFI_PASSWORD: "${NIFI_PASSWORD:?Set NIFI_PASSWORD in .env}"
+    volumes:
+      - ./scripts/init-nifi.py:/bootstrap/scripts/init-nifi.py:ro
+      - ./nifi/flows:/bootstrap/nifi/flows:ro
+    depends_on:
+      nifi:
+        condition: service_started
+    restart: "no"
+
+  # Shared Spark + Hive-client image used by both manual and scheduled jobs.
+  # The scheduler never mounts /var/run/docker.sock.
+  batch-runner:
+    profiles: ["analytics"]
+    build:
+      context: .
+      dockerfile: docker/batch/Dockerfile
+    image: big-data-ztm-batch:latest
+    command: ["python3", "-u", "/opt/project/scripts/container_scheduler.py", "--once"]
+    environment: &batch_environment
+      PYSPARK_PYTHON: python3
+      PYTHONUNBUFFERED: "1"
+      SPARK_LOCAL_HOSTNAME: localhost
+      HDFS_BASE: hdfs://namenode:8020
+      HIVE_JDBC_URL: jdbc:hive2://hive-server2:10000/default
+      SPARK_LOCALITY_WAIT: "${SPARK_LOCALITY_WAIT:-0s}"
+      SPARK_SCHEDULER_DEBUG: "${SPARK_SCHEDULER_DEBUG:-0}"
+      TZ: Europe/Warsaw
+    volumes: &batch_volumes
+      - ./spark:/opt/project/spark:ro
+      - ./scripts/container_scheduler.py:/opt/project/scripts/container_scheduler.py:ro
+      - ./hive/sql:/opt/project/hive/sql:ro
+      - batch_lock:/var/lock/ztm
+    depends_on:
+      namenode:
+        condition: service_started
+      hive-server2:
+        condition: service_started
+    restart: "no"
+
+  batch-scheduler:
+    profiles: ["scheduler"]
+    image: big-data-ztm-batch:latest
+    command: ["python3", "-u", "/opt/project/scripts/container_scheduler.py", "--loop"]
+    environment: *batch_environment
+    volumes: *batch_volumes
+    depends_on:
+      namenode:
+        condition: service_started
+      hive-server2:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   nifi_conf:
   nifi_content_repository:
@@ -155,3 +269,5 @@ volumes:
   hdfs_namenode:
   hdfs_datanode:
   kafka_data:
+  hive_db:
+  batch_lock:

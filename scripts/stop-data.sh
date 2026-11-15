@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Stops only source simulator, leaving NiFi, Kafka, HDFS and GTFS schedule intact.
+# Stop the simulator and NiFi GTFS daily download; do not stop Kafka/HDFS/Hive.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-docker compose -f docker-compose.yml --profile ingestion stop simulator
+compose=(docker compose -f docker-compose.yml)
+"${compose[@]}" --profile ingestion stop simulator
+"${compose[@]}" --profile tools run --rm --no-deps nifi-init \
+  python -u scripts/init-nifi.py --action stop-gtfs
