@@ -30,3 +30,13 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# custom
+/milestone 1/report1.*
+!/milestone 1/report1.pdf
+!/milestone 1/report1.tex
+/milestone 1/report1-blx.bib
+
+.idea/
+/local
+CLAUDE.md
