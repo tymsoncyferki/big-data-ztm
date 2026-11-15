@@ -7,7 +7,7 @@ Environmental values are interpolated if a later source observation is known;
 otherwise the latest reading at/before the target is carried forward.
 
 This script only simulates upstream inputs. NiFi remains responsible for
-validation, duplicate detection, archiving to HDFS and publishing to Kafka.
+record extraction, duplicate detection, archiving to HDFS and publishing to Kafka.
 
 Commands:
   python acquisition/simulator.py --check   # one request to each API

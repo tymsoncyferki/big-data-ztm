@@ -1,48 +1,43 @@
-# Downstream processing — team handoff
+# Batch Stage 2 — GTFS enrichment
 
-This is the **starting point for the next developer**. It is deliberately not a
-completed prediction pipeline. The ingestion and cleaned-data layers should
-remain independent of feature engineering and model training.
+This stage builds a reference dataset of scheduled trips by service date. It
+uses only GTFS files already cleaned from the Warsaw source archive.
 
-## Available inputs
+## Input datasets
 
-Run `bash scripts/bootstrap.sh` (Linux/WSL) or `.\scripts\bootstrap.ps1`
-(Windows PowerShell) first. A full incremental batch is executed during bootstrap. Then read the following Spark Parquet datasets
-from HDFS (or query the matching Hive external tables under database `cleaned`):
+All inputs must come from the same `feed_version`:
 
-| Dataset | HDFS path |
-|---|---|
-| GPS observations | `hdfs://namenode:8020/data/cleaned/gps_observations` |
-| Weather observations | `hdfs://namenode:8020/data/cleaned/weather_observations` |
-| Air-quality observations | `hdfs://namenode:8020/data/cleaned/air_quality_observations` |
-| GTFS trips | `hdfs://namenode:8020/data/cleaned/gtfs_trips` |
-| GTFS stop times | `hdfs://namenode:8020/data/cleaned/gtfs_stop_times` |
-| GTFS routes, stops and service calendars | `hdfs://namenode:8020/data/cleaned/gtfs_*` |
+| HDFS dataset | Source file | Used fields |
+|---|---|---|
+| `gtfs_trips` | `trips.txt` | Trip identifiers, line, service, direction and vehicle information |
+| `gtfs_routes` | `routes.txt` | Line number, description and transport type |
+| `gtfs_calendar_dates` | `calendar_dates.txt` | Service date and `exception_type` |
 
-The schemas, event keys, UTC timestamp conventions, and partitioning rules are
-documented in [`docs/data-contracts.md`](../../docs/data-contracts.md).
+## Transformation
 
-## Tasks for the next developer
+1. Keep `calendar_dates` records with `exception_type = 1` (active service).
+   Records with `exception_type = 2` do not produce output records.
+2. Join `trips` to active dates by `service_id`. A trip may appear on several
+   service dates.
+3. Join routes by `route_id` (left join, preserving trips even if route
+   metadata is unavailable).
+4. Select the trip, service-date and route fields defined in
+   [`docs/data-contracts.md`](../../docs/data-contracts.md#8-enriched-data-model-implemented).
 
-1. Verify how GPS `trip_id` maps to GTFS `trips.txt`, including `service_date`
-   and the correct `feed_version`.
-2. Match GPS points to scheduled stop visits and calculate observed versus
-   scheduled arrival/departure times. GTFS times can exceed `24:00:00`.
-3. Add weather and pollution features using explicit geographical and temporal
-   matching rules (avoid using future measurements when predicting delays).
-4. Design the feature/target table for training, define time-based validation,
-   then implement and evaluate models.
-5. Write enriched/feature outputs to a **separate** HDFS namespace, e.g.
-   `/data/enriched/` and `/data/features/`. Do not overwrite `/data/cleaned/`.
+## Output
 
-## Starter code
+`/data/enriched/gtfs_trip_services/feed_version=<version>/` contains one
+record per `(trip_id, service_date)` for each GTFS feed version, assuming the
+GTFS source uses unique trip identifiers. It is stored as Snappy Parquet.
 
-[`pipeline.py`](pipeline.py) contains the Spark session and typed-data readers,
-plus a clearly marked `NotImplementedError` where enrichment and modeling work
-should begin. It is a scaffold, **not a working predictor**.
+The output makes it possible to find a trip's line and scheduled operating
+date without repeatedly joining the GTFS reference files. Stop-by-stop times
+remain in `gtfs_stop_times`, and no GPS positions, weather observations,
+actual delays or predictions are joined here.
 
-## Separate online pathway
+## Execution
 
-Streaming from Kafka belongs to the planned online/speed layer. See
-[`spark/streaming/README.md`](../streaming/README.md). Do not change the batch
-cleaner to consume Kafka; the two paths have different purposes.
+`spark/downstream/pipeline.py` runs after Raw -> Cleaned in the full batch
+cycle. Previously completed feed versions are skipped using the enrichment
+marker under `/data/cleaned/_pipeline_state/enriched/`. Reprocessing with
+`--force` rebuilds the output for the same feed version.

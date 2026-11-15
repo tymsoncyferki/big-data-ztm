@@ -12,8 +12,8 @@ Usage: bash scripts/bootstrap.sh [--with-data | --no-data] [--with-schedule | --
   --with-schedule   Start the Docker batch scheduler (every 15 minutes).
   --no-schedule     (default) Stop the optional Docker batch scheduler.
 
-Always starts HDFS, Kafka, NiFi and Hive, initializes tables and NiFi flows,
-and runs one incremental batch. Optional services can be toggled later using
+Always starts HDFS, Kafka and NiFi, initializes NiFi flows,
+and runs one incremental Spark batch (JSON then GTFS). Optional services can be toggled later using
 scripts/start-data.sh, stop-data.sh, start-schedule.sh, stop-schedule.sh.
 USAGE
 }
@@ -46,7 +46,7 @@ require_secret() {
     echo "Set $1 to a non-placeholder value in .env." >&2; exit 1
   fi
 }
-for name in NIFI_USERNAME NIFI_PASSWORD NIFI_SENSITIVE_PROPS_KEY HIVE_DB_PASSWORD; do
+for name in NIFI_USERNAME NIFI_PASSWORD NIFI_SENSITIVE_PROPS_KEY; do
   require_secret "$name"
 done
 if [[ ${#NIFI_PASSWORD} -lt 12 || ${#NIFI_SENSITIVE_PROPS_KEY} -lt 12 ]]; then
@@ -69,13 +69,13 @@ if command -v crontab >/dev/null 2>&1; then
 fi
 
 echo '[1/7] Starting HDFS, Kafka and NiFi...'
-"${compose[@]}" up -d --build
+"${compose[@]}" up -d --build --remove-orphans
 
 echo '[2/7] Preparing Kafka topics...'
 bash scripts/init-kafka.sh
 
-echo '[3/7] Starting Hive and initializing external tables...'
-bash scripts/start-analytics.sh
+echo '[3/7] Preparing HDFS and Spark batch image...'
+bash scripts/setup-batch.sh
 
 echo '[4/7] Importing NiFi flows using containerized Python...'
 "${compose[@]}" --profile tools build nifi-init
@@ -89,7 +89,7 @@ else
   bash scripts/stop-data.sh
 fi
 
-echo '[6/7] Running one incremental Spark/Hive batch...'
+echo '[6/7] Running one incremental Spark batch...'
 bash scripts/run-scheduled.sh
 
 if [[ "$schedule_mode" == with-schedule ]]; then
@@ -102,6 +102,5 @@ fi
 
 echo 'Bootstrap completed.'
 echo 'NiFi: https://localhost:8443/nifi | HDFS: http://localhost:9870'
-echo 'Hive JDBC: jdbc:hive2://localhost:10000/default'
 echo "Simulator: $data_mode | Docker schedule: $schedule_mode"
 echo 'One-off batch: bash scripts/run-scheduled.sh'

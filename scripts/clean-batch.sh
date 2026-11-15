@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Process new HDFS Raw JSON via the shared container runner.
+# Manually clean one HDFS JSON source (normal batch processes JSON + GTFS).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [[ $# -le 1 ]] || { echo 'Usage: bash scripts/clean-batch.sh [all|gps|weather|air_quality]' >&2; exit 2; }

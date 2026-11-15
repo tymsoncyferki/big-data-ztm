@@ -1,31 +1,26 @@
 #!/usr/bin/env bash
-# Wait for HDFS and create raw and external-table paths (safe to rerun).
+# Create HDFS parent directories; GTFS tables appear only when source files exist.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 compose=(docker compose -f docker-compose.yml)
 for attempt in $(seq 1 60); do
-  if "${compose[@]}" exec -T namenode hdfs dfsadmin -safemode get 2>/dev/null | grep -q 'OFF'; then
+  if "${compose[@]}" exec -T namenode hdfs dfsadmin -safemode get 2>/dev/null | grep -q OFF; then
     break
   fi
   if (( attempt == 60 )); then
-    echo 'HDFS not ready; check NameNode and DataNode logs.' >&2
+    echo 'HDFS not ready; inspect NameNode/DataNode logs.' >&2
     exit 1
   fi
   sleep 2
 done
-
-raw=(gps weather air_quality gtfs)
-cleaned=(gps_observations weather_observations air_quality_observations
-         gtfs_routes gtfs_stops gtfs_trips gtfs_stop_times gtfs_calendar gtfs_calendar_dates)
-paths=(/data/warehouse /data/raw /data/cleaned)
-clean_paths=()
-for dataset in "${raw[@]}"; do paths+=("/data/raw/$dataset"); done
-for dataset in "${cleaned[@]}"; do
-  clean_paths+=("/data/cleaned/$dataset")
+paths=(/data/raw /data/cleaned /data/enriched /data/enriched/gtfs_trip_services)
+for name in gps weather air_quality gtfs; do paths+=("/data/raw/$name"); done
+for name in gps_observations weather_observations air_quality_observations; do
+  paths+=("/data/cleaned/$name")
 done
-paths+=("${clean_paths[@]}")
 "${compose[@]}" exec -T namenode hdfs dfs -mkdir -p "${paths[@]}"
-# Development cluster: Spark, Hive and HDFS clients share the 'supergroup' group.
-"${compose[@]}" exec -T namenode hdfs dfs -chmod 775 /data/warehouse /data/cleaned \
-  "${clean_paths[@]}"
-echo 'Raw and cleaned HDFS directories are ready.'
+"${compose[@]}" exec -T namenode hdfs dfs -chmod 775 \
+  /data/cleaned /data/enriched /data/enriched/gtfs_trip_services \
+  /data/cleaned/gps_observations /data/cleaned/weather_observations \
+  /data/cleaned/air_quality_observations
+echo 'HDFS Raw, Cleaned and Enriched parent directories ready.'

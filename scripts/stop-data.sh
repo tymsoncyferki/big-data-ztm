@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop the simulator and NiFi GTFS daily download; do not stop Kafka/HDFS/Hive.
+# Stop the simulator and NiFi GTFS daily download; do not stop Kafka/HDFS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 compose=(docker compose -f docker-compose.yml)

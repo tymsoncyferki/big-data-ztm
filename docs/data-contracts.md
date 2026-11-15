@@ -1,28 +1,65 @@
 # Data Schemas and Interfaces — Big Data ZTM
 
-**Version:** 1.1 (Docker-contained scheduling and cross-platform startup, 2026-11-15)  
-**Scope:** Python source simulation, NiFi, Kafka, HDFS Raw, Spark batch, HDFS Cleaned and Hive external tables.  
-**Status:** Acquisition/ingestion and the batch cleaned layer are **[IMPLEMENTED]**. Spatiotemporal enrichment, delay prediction and Kafka-based Spark streaming remain **[PLANNED]**. Examples are illustrative, not live API responses.
+**Version:** 2.0 (Spark/HDFS data contracts)  
+**Scope:** source simulator, NiFi ingestion, Kafka topics, HDFS Raw, Spark batch stages,
+HDFS Cleaned and HDFS Enriched.  
+**Status:** ingestion, Raw -> Cleaned and GTFS trip/service Enriched are
+implemented. GPS delay and environmental enrichment, Structured Streaming
+and Cassandra are planned.
+The normal batch always visits both stages, even when no new raw files exist.
 
 ## 1. Data Exchange Architecture
 
 ```text
-GPS API ────────────┐
-                    │
-Weather API ────────┼──> Python (source simulator) ──HTTP/JSON──> NiFi
-                    │                                           ├──> HDFS Raw: complete JSON snapshots
-Air Quality API ────┘                                           └──> Kafka: gps / weather / air_quality
-GTFS ZIP ─────────────────────────────────────────> NiFi ───────> HDFS Raw: GTFS ZIP
+GPS / Weather / Air Quality APIs
+          | 
+    Python simulator (optional)
+          |
+       NiFi  -------------> Kafka gps / weather / air_quality
+          |
+       HDFS Raw JSON
 
-HDFS Raw (JSON + ZIP) ──> Spark batch ──> HDFS Cleaned (Snappy Parquet)
-                                           └──> Hive external tables cleaned.*
-Optional Docker batch-scheduler (15 min) ──> Spark + Hive metadata
-Kafka ──> planned streaming/speed layer (NOT read by the batch cleaner)
+GTFS source ZIP -> NiFi -> HDFS Raw GTFS ZIP
+                          |
+                Spark Stage 1: Raw -> Cleaned
+              - dynamic JSON cleaning/deduplication
+              - GTFS ZIP to typed versioned Parquet
+                          |
+                HDFS /data/cleaned/*
+                          |
+                Spark Stage 2: Cleaned -> Enriched
+              - implemented: GTFS trip/service date + route
+              - future: GPS/GTFS and environment joins, delays
+                          |
+                HDFS /data/enriched/*
+
+Future online path: Kafka -> Spark Structured Streaming
+                    (+ static GTFS from HDFS) -> Cassandra
 ```
 
-**Responsibility boundaries:** Python simulates data arrival (buffered GPS and interpolated or carried-forward environmental data). NiFi ingests, validates, short-term-deduplicates, archives JSON/ZIP in HDFS and publishes event messages to Kafka. Spark **batch** reads immutable archived HDFS Raw files and performs validation, long-lived business-key deduplication and versioned/partitioned Parquet conversion. Hive exposes external tables over these Parquet paths. No GPS→GTFS/weather/air-quality joins or predictions are implemented here; these belong to the downstream layer.
+**No SQL catalog:** the Spark jobs read/write Parquet directly via HDFS paths.
+The optional Docker scheduler repeats the entire batch cycle every 15 minutes.
+Bootstrap runs one complete cycle whether the scheduler is enabled or not.
 
-## 2. Python → NiFi Interfaces [IMPLEMENTED]
+## 2. Upstream Data Sources [IMPLEMENTED]
+
+The table below lists the external data sources configured for the pipeline. GPS, weather and air-quality data are obtained by `acquisition/simulator.py`; GTFS is downloaded separately by the NiFi `GTFS Ingestion` process group (see `nifi/flows/warsaw-ingestion.json`). The frequencies describe **this pipeline's polling/trigger configuration**, not guaranteed update frequencies of the data providers.
+
+| Dataset | Upstream source (configured URL) | Response and access | Acquisition in this project |
+|---|---|---|---|
+| Vehicle GPS | [MKuranowski-hosted Warsaw vehicle positions](https://mkuran.pl/gtfs/warsaw/positions.json) | HTTP `GET`, JSON snapshot with `time` and `positions[]`; no API token is configured for this request | Python polls every **10 s**, buffers each received snapshot for **15 min**, then forwards the original snapshot to NiFi |
+| Weather | [Warsaw City Open Data — `get_zom_pogoda`](https://dane.um.warszawa.pl/api/action/get_zom_pogoda) | HTTP `POST`, JSON array of station readings; request header `Authorization: <WEATHER_API_TOKEN>` | Python polls every **60 s** and emits simulated station snapshots every **30 s** for the target time 15 min earlier |
+| Air quality | [Warsaw City Open Data — `get_bopipk_monitoring_jakosci_powietrza`](https://dane.um.warszawa.pl/api/action/get_bopipk_monitoring_jakosci_powietrza) | HTTP `POST`, JSON array of stations with nested `data[]`; same authorization header as weather | Python polls every **60 s**, retains stations whose `address.city` equals `Warszawa` after trimming/case folding, and emits simulated snapshots every **30 s** for the target time 15 min earlier |
+| Static GTFS schedules | [Warsaw GTFS ZIP hosted by Mikołaj Kuranowski](https://mkuran.pl/gtfs/warsaw.zip) | HTTP download of a ZIP containing GTFS `.txt` (CSV) files; no API token is configured | NiFi downloads once on first `--with-data` startup **if no nonempty archived ZIP exists**, then uses a daily **03:00 Europe/Warsaw** trigger |
+
+**Source provenance and scope.** The GPS and GTFS URLs are hosted by [Mikołaj Kuranowski's GTFS service](https://mkuran.pl/gtfs/); the weather and air-quality URLs are Warsaw municipal API endpoints. The simulator is an **upstream source emulator**, not the ingestion or storage layer: it delays GPS payloads and interpolates (or carries forward) environmental readings. Thus HDFS Raw stores **NiFi-received snapshots**, not necessarily verbatim responses from the original weather and air-quality APIs. NiFi then handles ingestion, extraction, short-window duplicate detection, archival and Kafka delivery.
+
+**Authentication and rights.** `WEATHER_API_TOKEN` in `.env` is required for both environmental endpoints when `--with-data` is enabled; it must not be committed to the repository. The [GTFS feed publisher's page](https://mkuran.pl/gtfs/) refers to [ZTM Warszawa schedule-data terms](https://www.ztm.waw.pl/pliki-do-pobrania/dane-rozkladowe/), Open Database License obligations for applicable map-derived content, and attribution to the relevant parties (including ZTM Warszawa, Mikołaj Kuranowski and OpenStreetMap contributors). Check the current source terms and the archive's `attributions.txt` before publishing or redistributing data. This document does not grant reuse rights for any source.
+
+The GTFS processing contract covers the source files listed in Section 6.
+Service dates used by the enrichment stage come from `calendar_dates.txt`.
+
+## 3. Python → NiFi Interfaces [IMPLEMENTED]
 
 | Stream | Method / URL inside the Docker network | Request structure | Emission frequency |
 |---|---|---|---|
@@ -30,9 +67,9 @@ Kafka ──> planned streaming/speed layer (NOT read by the batch cleaner)
 | Weather | `POST http://nifi:8082/weather` | `{"stations": [...]}` | Every 30 seconds, for the target time 15 minutes earlier |
 | Air quality | `POST http://nifi:8083/air-quality` | `{"stations": [...]}`, each station containing `data: [...]` | Every 30 seconds, for the target time 15 minutes earlier |
 
-Python polls GPS every 10 seconds and weather and air quality every 60 seconds. Environmental measurements are interpolated when observations are available on both sides of the target time. Otherwise, the latest available earlier value is used. The simulator does not generate measurements for times preceding the first known observation. The simulator is optional. The `--with-data` / `-WithData` choice controls both the simulator and the NiFi GTFS download flow; disabling acquisition stops the GTFS daily trigger without deleting archives.
+Python polls GPS every 10 seconds and weather and air quality every 60 seconds. Environmental measurements are interpolated when observations are available on both sides of the target time. Otherwise, the latest available earlier value is used. The simulator does not generate measurements for times preceding the first known observation. The simulator is optional. The `--with-data` / `-WithData` choice controls **source acquisition** (simulator and NiFi GTFS downloads), not the Spark cleaning contract. Disabling acquisition stops new simulator input and the GTFS daily trigger without deleting archived files; an explicitly started batch can still process already archived data.
 
-## 3. Apache Kafka Topics [IMPLEMENTED]
+## 4. Apache Kafka Topics [IMPLEMENTED]
 
 | Topic | Message unit (value) | Kafka key | NiFi deduplication key |
 |---|---|---|---|
@@ -42,7 +79,7 @@ Python polls GPS every 10 seconds and weather and air quality every 60 seconds. 
 
 **Serialization:** Each Kafka value is a **UTF-8 JSON object**, enriched with `ingested_at` by NiFi. Kafka keys are strings. `ingested_at` represents the processing time in NiFi, not the observation time. NiFi's cache-based deduplication has a limited retention window and does **not** guarantee end-to-end exactly-once delivery.
 
-### 3.1 GPS Record Schema
+### 4.1 GPS Record Schema
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
@@ -71,7 +108,7 @@ Example Kafka value:
 }
 ```
 
-### 3.2 Weather Record Schema
+### 4.2 Weather Record Schema
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
@@ -104,7 +141,7 @@ Example Kafka value:
 }
 ```
 
-### 3.3 Air Quality Record Schema
+### 4.3 Air Quality Record Schema
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
@@ -117,7 +154,7 @@ Example Kafka value:
 | `unit` | string | No | Parameter unit |
 | `ingested_at` | string | Added by NiFi | Event processing timestamp |
 
-**Note:** The payload sent to NiFi contains stations with nested `data` arrays. NiFi splits them into individual parameter records and attaches `name`, `lat`, `lon`, and `ingested_at`. The simulator selects only stations where `address.city == "Warszawa"`.
+**Note:** The payload sent to NiFi contains stations with nested `data` arrays. NiFi splits them into individual parameter records and attaches `name`, `lat`, `lon`, and `ingested_at`. The simulator selects only stations whose `address.city` matches `Warszawa` case-insensitively after trimming.
 
 Example Kafka value:
 
@@ -135,13 +172,13 @@ Example Kafka value:
 }
 ```
 
-## 4. Raw Data in HDFS [IMPLEMENTED]
+## 5. Raw Data in HDFS [IMPLEMENTED]
 
 HDFS archives the **complete incoming payload**, before NiFi splits it into individual Kafka messages. This preserves the original request structure and makes it possible to replay or reprocess a snapshot later. NiFi does **not** add `ingested_at` to archived raw JSON.
 
 > **Meaning of raw:** These are the payloads received by NiFi, not necessarily the unmodified responses from the original APIs. GPS snapshots are forwarded unchanged after buffering. Weather and air-quality snapshots are constructed by the Python simulator from interpolated or last-known measurements.
 
-### 4.1 Directories, file formats, and partitioning
+### 5.1 Directories, file formats, and partitioning
 
 | Dataset | HDFS directory | Filename pattern | Content |
 |---|---|---|---|
@@ -152,7 +189,7 @@ HDFS archives the **complete incoming payload**, before NiFi splits it into indi
 
 The `date` and `hour` partitions for GPS, weather, and air quality use **NiFi archival time in UTC**, not source measurement time. GTFS uses the **Europe/Warsaw** calendar date. When acquisition is enabled, NiFi downloads the archive daily at 03:00 local time; if there is no nonempty GTFS ZIP in HDFS when acquisition is first enabled, the trigger is executed once immediately and the bootstrap waits for the archived ZIP (up to 300 seconds). The UUID in the filename prevents collisions. Files are stored as individual JSON snapshots; they are **not** Parquet files or flattened JSON Lines records.
 
-### 4.2 Raw GPS snapshot
+### 5.2 Raw GPS snapshot
 
 **Structure:** top-level `time` plus a `positions` array. Every item in `positions` represents one vehicle position. The original GPS snapshot is delayed by 15 minutes after receipt, but its contents are preserved.
 
@@ -188,7 +225,7 @@ Example HDFS file (illustrative):
 
 **Compared with Kafka:** NiFi splits `positions[]` into one message per vehicle and adds `ingested_at` to each message. The snapshot's top-level `time` remains in the HDFS JSON; the corresponding Kafka record uses its individual `timestamp` instead.
 
-### 4.3 Raw weather snapshot
+### 5.3 Raw weather snapshot
 
 **Structure:** top-level `stations` array containing one flat weather object per station. The simulator emits a complete snapshot every 30 seconds for the target time 15 minutes earlier.
 
@@ -227,7 +264,7 @@ Example HDFS file (illustrative):
 
 **Compared with Kafka:** NiFi splits `stations[]` into one message per station and adds `ingested_at`. A weather Kafka message retains the flat station fields but does not contain the surrounding `stations` array. Individual meteorological fields can be `null` when no valid historical value was available.
 
-### 4.4 Raw air-quality snapshot
+### 5.4 Raw air-quality snapshot
 
 **Structure:** top-level `stations` array. Each station contains station metadata (`name`, `lat`, `lon`, potentially `address` and other source metadata) and a nested `data` array. Each `data[]` item represents **one pollutant at one timestamp**, with its own `param_code`, `value`, `time`, and `unit`. Different parameters may have different timestamps in source observations; in the emitted simulated snapshot, each available measurement is evaluated for the selected target time.
 
@@ -278,7 +315,7 @@ Example HDFS file (illustrative):
 
 **Compared with Kafka:** NiFi first splits the `stations[]` array, then splits every station's `data[]`. The example produces **three Kafka messages**, not two: `Station A / PM10`, `Station A / NO2`, and `Station B / PM10`. Each message contains the individual pollutant fields plus `name`, `lat`, `lon`, and `ingested_at` copied/added by NiFi. Station-level metadata such as `address` is retained in the HDFS snapshot but is **not automatically copied into Kafka records**. The simulator filters source stations to `address.city == "Warszawa"` and does not carry forward the source's categorical `ijp` index.
 
-### 4.5 HDFS versus Kafka — contract summary
+### 5.5 HDFS versus Kafka — contract summary
 
 | Property | HDFS raw | Kafka |
 |---|---|---|
@@ -292,175 +329,279 @@ Example HDFS file (illustrative):
 
 A snapshot may contain an **empty array** (`"positions": []` or `"stations": []`). Such a payload can still be archived in HDFS even when it yields no individual Kafka records.
 
-## 5. Static GTFS [IMPLEMENTED]
+## 6. Static GTFS: source files and semantics [IMPLEMENTED]
 
-Source: `https://mkuran.pl/gtfs/warsaw.zip`. NiFi archives the ZIP file; it is not published to Kafka. The Spark job extracts and types the following GTFS tables. `routes`, `stops`, `trips`, and `stop_times` are required; `calendar` and `calendar_dates` are optional:
+Source: `https://mkuran.pl/gtfs/warsaw.zip` (downloaded to HDFS Raw by NiFi).
+The archive provides the 12 CSV source files listed below.
 
-| GTFS file | Key fields | Purpose |
+| Source file | Processing | Important source fields / purpose |
 |---|---|---|
-| `routes.txt` | `route_id`, `route_short_name` | Transit route/line |
-| `trips.txt` | `trip_id`, `route_id`, `service_id` | Trip assigned to a route |
-| `stops.txt` | `stop_id`, `stop_name`, `stop_lat`, `stop_lon` | Transit stop |
-| `stop_times.txt` | `trip_id`, `stop_id`, `stop_sequence`, `arrival_time`, `departure_time` | Scheduled stop arrivals and departures |
-| `calendar.txt` / `calendar_dates.txt` | `service_id`, validity dates | Service calendar |
+| `agency.txt` | Supported | `agency_id`, `agency_name`, `agency_timezone=Europe/Warsaw` |
+| `attributions.txt` | Supported | Copyright/attribution and organization/provider descriptions |
+| `feed_info.txt` | Supported | `feed_publisher_name`, `feed_publisher_url`, `feed_lang`, `feed_version` (publisher timestamp) |
+| `calendar_dates.txt` | Supported | `service_id`, `date`, `exception_type`; in this feed, day-specific active services |
+| `routes.txt` | Supported | `route_id`, line number, direction description, `route_type`, color |
+| `stops.txt` | Supported | `stop_id`, name, stop/platform code, coordinates, locality, accessibility |
+| `trips.txt` | Supported | `trip_id`, `route_id`, `service_id`, `shape_id`, `block_id`, direction, variants |
+| `stop_times.txt` | Supported | `trip_id`, order of stops, arrival/departure times, boarding flags, distance |
+| `frequencies.txt` | Supported | `trip_id`, start/end of frequency period and `headway_secs` |
+| `shapes.txt` | Supported | Shape geometry with ordered latitude/longitude points and distance |
+| `fare_attributes.txt` | Supported | Fare IDs, price, PLN currency, transfer rules |
+| `fare_rules.txt` | Supported | Mapping fare IDs to route/zone conditions |
 
-GPS trips must be matched against the appropriate **GTFS feed version** and `service_date`. GTFS times may exceed `24:00:00`; parsing them must account for the service day.
+GTFS timetable and shape files can be large; batch processing requires
+temporary disk space in the Spark container as well as memory.
 
-## 6. Cleaned Data Model [IMPLEMENTED]
+**GTFS dates and clock times**:
 
-The **cleaned layer** is a typed, source-oriented representation produced by Spark (not NiFi). Nine external Hive tables expose these outputs under database `cleaned`. It does **not** join vehicle positions with scheduled stops or environmental readings; those operations belong to a future enriched layer.
+- `calendar_dates.date` is `YYYYMMDD`, converted to a Spark `date`.
+- `exception_type=1` adds/defines an active service date, `2` removes one.
+  Do not interpret a service ID alone as a universal daily schedule.
+- Arrival/departure times are GTFS **service-day times**. Values such as
+  `25:10:00` are legal and must not be parsed as ordinary wall-clock timestamps.
+- `stop_sequence` starts at **0** in this Warsaw feed; zero is not invalid.
+- `route_type=0` is tram, `route_type=3` is bus (GTFS route categories).
+- Stop IDs and service/trip IDs remain strings; they are not guaranteed to
+  behave like numerical IDs.
 
-### 6.1 Format, locations, and partitions
+Refer to the [GTFS Schedule reference](https://gtfs.org/documentation/schedule/reference/)
+for general file semantics. Source-specific extensions such as `exceptional`,
+`variant_code`, `fleet_type`, `stop_name_stem`, `town_name`, and `street_name`
+are retained as typed/text fields, without asserting that they are standard
+GTFS Schedule columns.
 
-**Storage format:** Apache Parquet with Snappy compression. Timestamp columns use Spark `TimestampType`, interpreted and written in **UTC**. Static GTFS identifiers remain strings to preserve leading zeros and source formatting. Dynamic datasets use the **UTC observation date** as the partition key (`date`), not the ingestion or archival date.
+## 7. Cleaned Data Model [IMPLEMENTED]
 
-| Dataset | HDFS directory (implemented) | Partitioning | Deduplication key |
-|---|---|---|---|
-| `gps_observations` | `/data/cleaned/gps_observations/date=YYYY-MM-DD/` | UTC observation date | `(trip_id, side_number, event_time_utc)` |
-| `weather_observations` | `/data/cleaned/weather_observations/date=YYYY-MM-DD/` | UTC observation date | `(station_id, event_time_utc)` |
-| `air_quality_observations` | `/data/cleaned/air_quality_observations/date=YYYY-MM-DD/` | UTC observation date | `(station_id, param_code, event_time_utc)` |
-| `gtfs_routes` | `/data/cleaned/gtfs_routes/feed_version=<id>/` | GTFS feed version | `(feed_version, route_id)` |
-| `gtfs_stops` | `/data/cleaned/gtfs_stops/feed_version=<id>/` | GTFS feed version | `(feed_version, stop_id)` |
-| `gtfs_trips` | `/data/cleaned/gtfs_trips/feed_version=<id>/` | GTFS feed version | `(feed_version, trip_id)` |
-| `gtfs_stop_times` | `/data/cleaned/gtfs_stop_times/feed_version=<id>/` | GTFS feed version | `(feed_version, trip_id, stop_sequence)` |
-| `gtfs_calendar` | `/data/cleaned/gtfs_calendar/feed_version=<id>/` | GTFS feed version | `(feed_version, service_id)` |
-| `gtfs_calendar_dates` | `/data/cleaned/gtfs_calendar_dates/feed_version=<id>/` | GTFS feed version | `(feed_version, service_id, date)` (may contain more than one exception) |
+### 7.1 Format, partitions and source responsibility
 
-For instance, a GPS output partition would be `/data/cleaned/gps_observations/date=2026-11-15/part-*.snappy.parquet`. The path partition columns (`date` or `feed_version`) are available when Spark reads the dataset as a partitioned directory; they need not be repeated in the underlying Parquet row files.
-
-`feed_version` must uniquely identify the exact downloaded GTFS archive (for example, the download date combined with a short checksum), rather than only the nominal service date. `gtfs_calendar` and `gtfs_calendar_dates` are conditional on the respective files being present in the feed.
-
-### 6.2 Implemented Parquet schemas
-
-Types below use Spark SQL conventions: `STRING`, `DOUBLE`, `INT`, `DATE`, and `TIMESTAMP`; the Spark session timezone is UTC. An asterisk (`*`) indicates a nullable value. `date` and `feed_version` are path partition columns registered in Hive, not repeated inside the Parquet row file. The code enforces the stated business keys by deterministic deduplication in the dynamic layer.
-
-**`gps_observations`** — one valid vehicle position:
-
-| Column | Type | Source / meaning |
+| Output | HDFS directory | Partition |
 |---|---|---|
-| `record_id` | STRING | Source `id` |
-| `trip_id` | STRING | GPS `trip_id`; matching to GTFS is subject to verification |
-| `side_number` | STRING | Vehicle fleet number |
-| `service_date` | DATE | Parsed GPS `service_date` (`YYYYMMDD`) |
-| `event_time_utc` | TIMESTAMP | Parsed GPS `timestamp`; offset-aware ISO source is expected |
-| `source_file` | STRING | Full HDFS URI of archived input JSON |
-| `ingested_at_utc` | TIMESTAMP* | **NULL**: HDFS Raw contains no NiFi `ingested_at` |
-| `lat`, `lon` | DOUBLE | WGS84 position |
-| `bearing` | DOUBLE* | Vehicle heading, if available |
-| `date` | DATE | UTC event-date partition |
+| GPS | `/data/cleaned/gps_observations/` | `date` (UTC event day) |
+| Weather | `/data/cleaned/weather_observations/` | `date` (UTC event day) |
+| Air quality | `/data/cleaned/air_quality_observations/` | `date` (UTC event day) |
+| GTFS source files | `/data/cleaned/gtfs_<source>/` | `feed_version=<archive-date>-<sha12>` |
 
-**`weather_observations`** — one observation from one weather station:
+Data files use **Parquet + Snappy**. GTFS datasets correspond to the 12
+source files listed in Section 6.
+The date embedded in the HDFS GTFS raw path is the feed download date in
+Europe/Warsaw, not necessarily the first date of timetable validity.
 
-| Column | Type | Source / meaning |
+`feed_version` in the HDFS path is the pipeline's archive identity, formed from
+`<date>-<first 12 SHA-256 hex characters of archive contents>`. In contrast,
+`feed_info.feed_version` is the **publisher-provided string** from the ZIP.
+The two fields have different meanings and should not be substituted.
+
+### 7.2 GPS, weather and air quality
+
+The dynamic JSON transformations are in `spark/batch/clean_raw.py`:
+
+| Output | Stable fields | Deduplication key |
 |---|---|---|
-| `station_id` | STRING | SHA-256(lowercase(trim(`lokalizacja`))); provisional and name-dependent |
-| `station_name` | STRING | Original `lokalizacja` for traceability |
-| `event_time_utc` | TIMESTAMP | Parsed `czas` |
-| `ingested_at_utc` | TIMESTAMP* | **NULL** in cleaned Raw-derived data: NiFi does not persist `ingested_at` in raw JSON |
-| `source_file` | STRING | Full HDFS URI of archived input JSON |
-| `lat`, `lon` | DOUBLE | Station coordinates |
-| `temp_pow`, `temp_naw` | DOUBLE* | Air and road-surface temperatures |
-| `wilg_pow` | DOUBLE* | Relative humidity |
-| `pred_wiatru`, `kier_wiatru` | DOUBLE* | Wind speed and direction |
-| `int_opadu` | DOUBLE* | Precipitation intensity |
-| `date` | DATE | UTC event-date partition |
+| `gps_observations` | `record_id`, `trip_id`, `side_number`, `service_date`, `event_time_utc`, `lat`, `lon`, `bearing`, `source_file`, `ingested_at_utc` | (`trip_id`, `side_number`, `event_time_utc`) |
+| `weather_observations` | `station_id`, `station_name`, `event_time_utc`, `lat`, `lon`, `temp_pow`, `temp_naw`, `wilg_pow`, `pred_wiatru`, `kier_wiatru`, `int_opadu`, `source_file`, `ingested_at_utc` | (`station_id`, `event_time_utc`) |
+| `air_quality_observations` | `station_id`, `station_name`, `param_code`, `param_name`, `event_time_utc`, `lat`, `lon`, `value`, `unit`, `source_file`, `ingested_at_utc` | (`station_id`, `param_code`, `event_time_utc`) |
 
-**`air_quality_observations`** — one pollutant measurement at one station and time:
+The `date` partition is based on `event_time_utc`. GPS time is read as a UTC
+value; weather/air-quality source times without offsets are interpreted as
+Europe/Warsaw and converted to UTC. `ingested_at_utc` is NULL for archival
+JSON because NiFi adds ingestion time on the **Kafka** branch, not to the Raw
+snapshot. Station IDs are provisional hashes of normalized station names.
+Basic coercion, filtering and deduplication are performed during cleaning.
 
-| Column | Type | Source / meaning |
-|---|---|---|
-| `station_id` | STRING | SHA-256(lowercase(trim(`name`))); provisional and name-dependent |
-| `station_name` | STRING | Original station `name` |
-| `param_code` | STRING | Pollutant parameter identifier, e.g. `PM10` |
-| `param_name` | STRING* | Pollutant label |
-| `event_time_utc` | TIMESTAMP | Parsed `time` |
-| `ingested_at_utc` | TIMESTAMP* | **NULL** in cleaned Raw-derived data: NiFi does not persist `ingested_at` in raw JSON |
-| `source_file` | STRING | Full HDFS URI of archived input JSON |
-| `lat`, `lon` | DOUBLE | Station coordinates |
-| `value` | DOUBLE | Pollutant measurement |
-| `unit` | STRING* | Measurement unit as received |
-| `date` | DATE | UTC event-date partition |
+### 7.3 GTFS Parquet columns
 
-Meteorological field names preserve the source naming and units. The **implemented** weather/air-quality transformation treats timezone-less `czas`/`time` as `Europe/Warsaw` and converts it to UTC. Ambiguous or nonexistent local times during DST transitions are **not** separately validated by the current code and need a source-side policy. Station-name-based hashes are provisional (renames/collisions require a stable station catalog).
+All columns follow the order defined by `spark/batch/clean_gtfs.py`.
+Blank optional CSV cells are mapped to NULL. Source values are converted to
+`string`, `int`, `double` or Spark `date`. Details:
 
-**GTFS reference tables** — typed rows extracted from the versioned ZIP:
-
-| Dataset | Columns and Spark SQL types |
+| Dataset | Selected columns and field-level transformations |
 |---|---|
-| `gtfs_routes` | `feed_version STRING`, `route_id STRING`, `route_short_name STRING*`, `route_long_name STRING*`, `route_type INT*` |
-| `gtfs_stops` | `feed_version STRING`, `stop_id STRING`, `stop_name STRING*`, `stop_lat DOUBLE*`, `stop_lon DOUBLE*` |
-| `gtfs_trips` | `feed_version STRING`, `trip_id STRING`, `route_id STRING`, `service_id STRING`, `trip_headsign STRING*`, `direction_id INT*` |
-| `gtfs_stop_times` | `feed_version STRING`, `trip_id STRING`, `stop_sequence INT`, `stop_id STRING`, `arrival_time STRING*`, `departure_time STRING*`, `arrival_seconds INT*`, `departure_seconds INT*` |
-| `gtfs_calendar` | `feed_version STRING`, `service_id STRING`, `monday BOOLEAN`, `tuesday BOOLEAN`, `wednesday BOOLEAN`, `thursday BOOLEAN`, `friday BOOLEAN`, `saturday BOOLEAN`, `sunday BOOLEAN`, `start_date DATE`, `end_date DATE` |
-| `gtfs_calendar_dates` | `feed_version STRING`, `service_id STRING`, `date DATE`, `exception_type INT` |
+| `gtfs_agency` | `agency_id`, `agency_name`, `agency_url`, `agency_timezone`, `agency_lang`, `agency_phone` |
+| `gtfs_attributions` | `attribution_id`, `organization_name`, `attribution_url`, `is_producer`, `is_operator`, `is_authority`, `is_data_source` |
+| `gtfs_feed_info` | `feed_publisher_name`, `feed_publisher_url`, `feed_lang`, `feed_start_date`, `feed_end_date`, `feed_version` (source string) |
+| `gtfs_routes` | `route_id`, `agency_id`, `route_short_name`, `route_long_name`, `route_type`, `route_color`, `route_text_color` |
+| `gtfs_stops` | `stop_id`, `stop_name`, `stop_code`, `platform_code`, `stop_lat`, `stop_lon`, `location_type`, `parent_station`, `wheelchair_boarding`, `zone_id`, `stop_name_stem`, `town_name`, `street_name` |
+| `gtfs_trips` | `trip_id`, `route_id`, `service_id`, `shape_id`, `trip_short_name`, `trip_headsign`, `direction_id`, `exceptional`, `wheelchair_accessible`, `block_id`, `block_short_name`, `variant_code`, `fleet_type` |
+| `gtfs_stop_times` | `trip_id`, `stop_sequence`, `stop_id`, `arrival_time`, `departure_time`, `pickup_type`, `drop_off_type`, `shape_dist_traveled`, **`arrival_seconds` and `departure_seconds`** |
+| `gtfs_calendar_dates` | `service_id`, `date`, `exception_type` |
+| `gtfs_frequencies` | `trip_id`, `start_time`, `end_time`, `headway_secs`, `exact_times`, **`start_seconds`, `end_seconds`** |
+| `gtfs_shapes` | `shape_id`, `shape_pt_sequence`, `shape_pt_lat`, `shape_pt_lon`, `shape_dist_traveled` |
+| `gtfs_fare_attributes` | `fare_id`, `price`, `currency_type`, `payment_method`, `transfers`, `agency_id`, `transfer_duration` |
+| `gtfs_fare_rules` | `fare_id`, `route_id`, `origin_id`, `destination_id`, `contains_id` |
 
-GTFS `arrival_seconds` and `departure_seconds` count seconds from the **service-day start**; values can exceed 86,400 for scheduled times after `24:00:00`. Keep the original time strings as well. These are not UTC timestamps and must not be converted to an absolute instant without the service date and applicable timezone. Optional GTFS attributes can be added without changing the key contracts.
+`*_seconds` columns are computed as `3600*hours + 60*minutes + seconds`,
+keeping hours greater than 23. They are relative to the GTFS service day;
+they are **not** UNIX/UTC timestamps. Extremely large `stop_times` and
+`shapes` are processed without a global deduplication shuffle; small reference
+files are deduplicated by complete row, and records missing required identifiers
+are omitted during cleaning.
 
-### 6.3 Cleaning and consistency rules
+## 8. Enriched Data Model [IMPLEMENTED]
 
-- Parse GPS ISO offset timestamps and treat naive weather/air-quality timestamps as Europe/Warsaw; retain `event_time_utc`, with unavailable `ingested_at_utc` left NULL in Raw-derived records.
-- Filter records with missing identifiers, invalid coordinates (`-90..90` latitude, `-180..180` longitude), or unparseable timestamps; GPS invalid bearings become NULL and invalid air-quality values (NaN, negative) are filtered. **No quarantine or rejection metrics are implemented** in this batch.
-- Deduplicate with the dataset-specific logical keys above during processing/reprocessing. The NiFi duplicate cache alone is not sufficient for permanent uniqueness; Spark applies window `row_number()` with `source_file` descending and full-row SHA-256 tie breaking.
-- Preserve original station names and measurement units; never silently fill missing meteorological values or convert units without a verified rule.
-- Use the exact GTFS `feed_version` for reproducible route/trip/stop references; GPS-to-GTFS trip correspondence still needs source-level validation.
-- Write cleaned rows only to `/data/cleaned/...`; keep `/data/raw/...` immutable for replay and auditing.
+### 8.1 Purpose and sources
 
-## 7. Conceptual Data Model [PLANNED downstream]
+The Enriched layer contains one derived GTFS dataset:
+`gtfs_trip_services`. It associates an individual scheduled trip with each
+date on which that trip's service operates and adds its route description.
+This is reference data for later schedule matching; it is not a delay metric.
+
+Only three cleaned datasets are read, **from the same feed version**:
+
+| Cleaned input | Source ZIP file | Fields used for joins / enrichment |
+|---|---|---|
+| `gtfs_trips` | `trips.txt` | `trip_id`, `service_id`, `route_id` and trip metadata |
+| `gtfs_calendar_dates` | `calendar_dates.txt` | `service_id`, `date`, `exception_type` |
+| `gtfs_routes` | `routes.txt` | `route_id`, `route_short_name`, `route_long_name`, `route_type` |
+
+### 8.2 Transformations
+
+1. Select `gtfs_calendar_dates` rows with `exception_type = 1` and rename
+   `date` to `service_date` (`date` type). Values of `exception_type = 2`
+   represent non-operating dates and are excluded. Deduplicate
+   `(service_id, service_date)`.
+2. **Inner join** `gtfs_trips` with active service dates on `service_id`.
+   This expands each trip into the dates when its service operates.
+3. **Left join** the route reference on `route_id`. The route description is
+   attached when available; trips without matching route metadata are kept.
+4. Select the output columns below. No calendar is inferred, and no data are
+   generated for service dates absent from `calendar_dates.txt`.
+
+### 8.3 Output contract
+
+**HDFS path:** `/data/enriched/gtfs_trip_services/feed_version=<archive-date>-<sha12>/`  
+**Format:** Snappy Parquet  
+**Record granularity:** one scheduled trip on one operating date  
+**Logical key:** (`feed_version`, `trip_id`, `service_date`). The output
+assumes unique trip identifiers within a source feed; `feed_version` is the
+HDFS partition identity, not a publisher field inside each Parquet row.
+
+| Output column(s) | Type | Origin / meaning |
+|---|---|---|
+| `trip_id` | string | Trip identifier from `trips.txt` |
+| `service_date` | date | Operating date from `calendar_dates.txt` after filtering active dates |
+| `service_id` | string | Service identifier shared by trips and service dates |
+| `route_id` | string | Route identifier in `trips.txt` and `routes.txt` |
+| `route_short_name`, `route_long_name` | string | Route number and description from `routes.txt` (nullable when no match) |
+| `route_type` | int | GTFS transport mode from `routes.txt` (nullable when no match) |
+| `trip_short_name`, `trip_headsign` | string | Trip label and destination |
+| `direction_id` | int | Trip direction indicator |
+| `shape_id` | string | Shape reference |
+| `exceptional`, `wheelchair_accessible` | int | Trip characteristics |
+| `block_id`, `block_short_name`, `variant_code`, `fleet_type` | string | Source-specific trip metadata |
+
+**Example interpretation:** if a trip has `service_id = S1` and the feed
+contains two active `calendar_dates` records for `S1`, the enriched dataset
+contains two records for that trip, with different `service_date` values.
+
+`stop_times.txt` is not joined into this dataset: scheduled stop arrivals and
+departures are retained in `/data/cleaned/gtfs_stop_times/` and should be read
+from the **same feed version**. Enriched data does not include GPS observations,
+weather, air quality, actual punctuality, calculated delays or predictions.
+
+### 8.4 Refresh and consumption
+
+`spark/downstream/pipeline.py` runs after Raw -> Cleaned on each full batch
+cycle. Each new feed version is processed once and tracked under
+`/data/cleaned/_pipeline_state/enriched/`. A manual GTFS run with `--force`
+rebuilds the Enriched output for its feed version.
+
+The reference can be read directly via Spark:
+
+```python
+schedule = spark.read.parquet(
+    "hdfs://namenode:8020/data/enriched/gtfs_trip_services/"
+)
+```
+
+## 9. Conceptual Data Model [PLANNED integration]
 
 ```mermaid
 erDiagram
-    VEHICLE ||--o{ GPS_OBSERVATION : generates
-    TRIP ||--o{ GPS_OBSERVATION : associated_with
     ROUTE ||--o{ TRIP : contains
-    TRIP ||--o{ STOP_TIME : has
-    STOP ||--o{ STOP_TIME : appears_in
-    GTFS_FEED ||--o{ TRIP : defines
-    WEATHER_STATION ||--o{ WEATHER_OBSERVATION : records
-    AIR_STATION ||--o{ AIR_MEASUREMENT : records
+    GTFS_FEED ||--o{ TRIP : provides
+    SERVICE_DATE ||--o{ TRIP : activates
+    TRIP ||--o{ STOP_TIME : schedules
+    STOP ||--o{ STOP_TIME : referenced_by
+    VEHICLE ||--o{ GPS_OBSERVATION : emits
+    WEATHER_STATION ||--o{ WEATHER_OBSERVATION : measures
+    AIR_STATION ||--o{ AIR_MEASUREMENT : measures
 ```
 
-**Entities and relationships:**
+Here `GTFS_FEED` and `SERVICE_DATE` are **conceptual entities**. There are no
+physical tables with those names. For each Parquet dataset, records should
+be joined within the **same `feed_version`**, never across unrelated snapshots.
+GPS-to-trip relationships, scheduled stop matching and environmental joins
+remain design work; no one-to-one correspondence between live GPS `trip_id`
+and GTFS `trip_id` is assumed by the current code.
 
-- A **vehicle (`VEHICLE`)** is provisionally identified by its fleet/side number and generates multiple GPS observations.
-- A **route (`ROUTE`)** contains many **trips (`TRIP`)**. A trip represents a scheduled service associated with a service calendar and a date.
-- A **trip (`TRIP`)** has an ordered sequence of **stop times (`STOP_TIME` → `STOP`)**, which forms the basis for calculating scheduled arrival times.
-- A **GPS observation (`GPS_OBSERVATION`)** records a particular vehicle's position at a particular time and is associated with a trip.
-- **Weather stations and their observations**, and **air quality stations and their measurements**, describe environmental conditions at a place and time. They have no direct foreign key to a vehicle.
-- A **GTFS feed version (`GTFS_FEED`)** specifies the schedule against which planned arrival times are calculated.
+## 10. Two-stage batch processing and orchestration
 
-**Joining datasets:** The GPS → trip → route/scheduled stops relationship is based on GTFS identifiers, once their consistency across sources has been verified. Matching GPS with weather and air quality requires a **spatiotemporal join**, for example selecting the nearest station and most recent available measurement within an allowed time window. Station selection, temporal tolerance, and quality rules must be agreed upon; they are not part of the current NiFi pipeline.
+The required architecture is **Raw -> Cleaned -> Enriched**. In the normal
+combined batch command these stages run **in order**, regardless of whether
+a repeating scheduler is configured. The internals of Stage 1 happen in two
+passes (dynamic JSON, then GTFS ZIP); those passes are **not** themselves the
+Raw/Cleaned/Enriched architectural stages.
 
+### 10.1 Stage 1: Raw -> Cleaned [IMPLEMENTED]
 
+Entry point: `spark/batch/run_pipeline.py`, normally invoked by the
+containerized scheduler via `scripts/run-scheduled.sh` or during bootstrap.
 
-## 8. Batch processing and orchestration [IMPLEMENTED]
+- Scan HDFS Raw for new immutable GPS/weather/air-quality JSON snapshots.
+- Flatten, type, normalize and deduplicate the incoming observations. Merge
+  changed UTC date partitions with existing Parquet; write to staging first,
+  then install by HDFS rename. Only afterwards advance the persistent manifest.
+- Scan HDFS Raw GTFS ZIP archives. Download each archive to container-local
+  temporary storage; extract one CSV at a time; write versioned Parquet for
+  every supported file actually present. Use a SHA-based feed version.
+- Mark a GTFS ZIP as processed only after Spark has successfully written all
+  of its Parquet datasets. An interruption can leave some datasets written;
+  repeating the same archive rewrites the content-addressed version.
 
-### 8.1 Raw → Cleaned incrementality
+State: `/data/cleaned/_pipeline_state/raw/`, `/gtfs/`, `/enriched/`,
+`/staging/`, `/backups/`.
+`--force` on a manual GTFS run regenerates the specified version.
 
-- Entry point: `scripts/clean-batch.sh [all|gps|weather|air_quality]`, invoking `spark/batch/run_pipeline.py` in the **on-demand** Docker Compose `batch-runner` container (`local[2]`, driver memory 2 GiB). That runner calls `clean_raw.run_dataset(...)` without changing its row-level contract.
-- HDFS state root: `/data/cleaned/_pipeline_state`. A JSON manifest is stored at `raw/<dataset>.json`, with version `1` and the archived file's HDFS URI, size and modification timestamp; input files must remain immutable and append-only. Missing/altered previously processed JSON files cause a hard error.
-- Only previously unseen raw JSON archives are loaded. Spark validates, flattens and deduplicates the new rows, merges them with any previously cleaned data in **affected UTC observation-date partitions**, and deduplicates again using the dataset-specific business key.
-- Each rebuilt partition is first written to a unique `_pipeline_state/staging/...` location, then installed by HDFS directory rename while the prior version is temporarily held under `_pipeline_state/backups/...`. Backups are checked/recovered before a new run. The manifest is committed after all affected partitions are installed; interrupted runs may reprocess inputs, but business-key deduplication makes this retryable.
-- The GPS/Spark stall observed in development was mitigated using `spark.locality.wait=0s` by default, controllable through `SPARK_LOCALITY_WAIT`; this is an operational workaround, not a guarantee for every deployment. The optional `SPARK_SCHEDULER_DEBUG=1` enables scheduler debug logs.
-- `ingested_at_utc` is explicitly NULL for these three datasets, because the upstream NiFi `ingested_at` value is only on Kafka records, **not** archived JSON.
+### 10.2 Stage 2: Cleaned -> Enriched [IMPLEMENTED: GTFS reference]
 
-### 8.2 Versioned GTFS conversion
+Entrypoint: `spark/downstream/pipeline.py`, automatically invoked by the
+normal batch after Stage 1.
 
-- Entry point: `scripts/clean-gtfs.sh [--force] [HDFS_ZIP_URI]`; the containerized scheduler visits all archived ZIPs, not only the latest.
-- The Spark job (`spark/batch/clean_gtfs.py`) copies each ZIP from HDFS into temporary local container storage, parses individual UTF-8 CSV files and writes typed Parquet under `/data/cleaned/gtfs_<table>/feed_version=<version>`.
-- The version is the archive directory's date plus the first 12 hexadecimal characters of the **ZIP content SHA-256** (`<date>-<sha12>`). The job preserves GTFS times over 24:00 as seconds since service-day start, without converting them to UTC.
-- Completion markers in `_pipeline_state/gtfs/<hash>.done` are keyed to archive URI and HDFS size/mtime from the Hadoop API. Marker names can differ from the previous host-script implementation, causing a one-time safe reprocessing of previously handled archives after migration. A marker is created **only after** both the Spark job and Hive partition refresh succeed. Reruns can skip finished inputs; `--force` repeats conversion. Optional GTFS calendar files are written only when present.
-- GTFS writes are per-table, **not one multi-table transaction**. Reprocessing an archive after an interruption can overwrite individual versions; markers keep the normal successful path idempotent.
+- Build `gtfs_trip_services` from the cleaned trip, route and service-date
+  datasets, joining by `service_id` and `route_id`.
+- Write the versioned Snappy Parquet output to
+  `/data/enriched/gtfs_trip_services/feed_version=<version>/`.
+- Skip completed feed versions using state markers unless `--force` is used.
 
-### 8.3 Hive, startup and schedule
+The full input, transformation and output contract is specified in Section 8.
+Cross-source GPS/GTFS joins, delay metrics, environmental features, model
+training and prediction are planned for future stages.
 
-- `hive/sql/cleaned_tables.sql` creates nine external Parquet tables under database `cleaned`; `hive/sql/refresh_partitions.sql` runs `MSCK REPAIR TABLE ... SYNC PARTITIONS` for all nine. The combined Docker batch runner refreshes Hive metadata after Raw processing and after successful GTFS conversions; a GTFS completion marker is written only after the corresponding refresh.
-- `scripts/bootstrap.sh` and `scripts/bootstrap.ps1` always start NiFi, Kafka, HDFS, PostgreSQL, Hive Metastore, HiveServer2, initialize the external tables, and run one incremental Spark batch immediately. `--with-data` / `-WithData` optionally enables the source simulator **and** NiFi GTFS acquisition (including a one-off initial download when HDFS is empty); `--with-schedule` / `-WithSchedule` optionally enables the Docker batch scheduler. Both are off by default. These features can be toggled later without restarting core infrastructure.
-- `scripts/run-scheduled.sh` invokes the containerized batch runner. The runner and optional `batch-scheduler` share a Docker-volume file lock via Python `fcntl`, so overlapping manual and periodic runs are skipped. The Python clock runs **inside Docker** at 15-minute boundaries; no host cron, flock, Python or Docker socket is required. Logs are available via `docker compose --profile analytics --profile scheduler logs batch-scheduler`. Scheduling requires the Docker Engine to remain running.
-- Spark in this repository is a **batch process**, not a permanently running Spark cluster or Kafka streaming consumer. Planned enrichment/forecasting remains separate.
+### 10.3 Startup and optional recurrence
 
-## 9. Known limitations and verification
+- `scripts/bootstrap.sh` / `bootstrap.ps1` start the core services and run
+  one normal complete two-stage batch, even when source acquisition and the
+  optional 15-minute scheduler are disabled.
+- `--with-data` enables the Python simulator and NiFi's GTFS ZIP download;
+  first use requests an immediate download if no ZIP has been archived.
+- `--with-schedule` runs the same two-stage cycle every 15 minutes in a
+  Docker scheduler container. A shared file lock avoids overlapping runs.
+- `clean-batch.sh gps`, `clean-gtfs.sh` and `run-batch.ps1 -Dataset ...` are
+  intentionally narrower, explicit maintenance commands, not the normal cycle.
+- Spark reads Parquet from HDFS directly; there is no SQL service or manual
+  registration of external tables or partitions.
 
-- NiFi cache deduplication is time-bounded; the batch manifest assumes immutability and requires a controlled rebuild after Raw deletion or mutation. The per-partition HDFS rename protocol is recoverable but not a cross-partition transactional commit.
-- Station IDs depend on mutable names; timezone-less local timestamps can be ambiguous at daylight-saving transitions. Unit validation, full GTFS referential-integrity checks, rejected-row quarantine, quality dashboards and a streaming analytics layer are not yet implemented.
-- The source `trip_id` to versioned GTFS `trip_id` correspondence and resulting lateness/delay calculations are not established here.
-- Static validation: `bash scripts/validate-project.sh` or `.\scripts\validate-project.ps1` (Python tests run in Docker). On a running stack: `bash scripts/refresh-hive.sh` and a Beeline `SHOW PARTITIONS`/`SELECT COUNT(*)` against `cleaned.gps_observations`. All illustrative JSON examples above remain examples rather than API payload assertions.
+## 11. Boundaries and caveats
+
+- The enrichment stage derives operating dates from `calendar_dates.txt`.
+  It does not infer schedules for dates absent from that source.
+- The service time strings represent a day of GTFS service, not local wall-clock
+  timestamps. DST handling and mapping service dates to instants for online
+  processing must be defined explicitly in the future streaming stage.
+- Station-name-based identifiers can change after source renames; upstream
+  GPS `trip_id` equality with GTFS `trip_id` has not been established.
+- Cleaned Parquet is partitioned by event date or immutable feed version. The
+  pipeline state under `/data/cleaned/_pipeline_state` should not be deleted
+  independently of the data without an explicit rebuild plan.
+- NiFi performs schema validation and routes ingestion errors. Spark performs
+  data cleaning and type conversion.

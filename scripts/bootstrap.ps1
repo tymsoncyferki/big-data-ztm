@@ -13,7 +13,7 @@ param(
 . (Join-Path $PSScriptRoot 'common.ps1')
 if ($WithData -and $NoData) { throw 'Choose either -WithData or -NoData.' }
 if ($WithSchedule -and $NoSchedule) { throw 'Choose either -WithSchedule or -NoSchedule.' }
-foreach ($secret in @('NIFI_USERNAME','NIFI_PASSWORD','NIFI_SENSITIVE_PROPS_KEY','HIVE_DB_PASSWORD')) {
+foreach ($secret in @('NIFI_USERNAME','NIFI_PASSWORD','NIFI_SENSITIVE_PROPS_KEY')) {
     $null = Assert-ZtmSecret $secret
 }
 if ((Get-ZtmSecret 'NIFI_PASSWORD').Length -lt 12 -or (Get-ZtmSecret 'NIFI_SENSITIVE_PROPS_KEY').Length -lt 12) {
@@ -22,7 +22,7 @@ if ((Get-ZtmSecret 'NIFI_PASSWORD').Length -lt 12 -or (Get-ZtmSecret 'NIFI_SENSI
 if ($WithData) { $null = Assert-ZtmSecret 'WEATHER_API_TOKEN' }
 
 Write-Host '[1/7] Starting HDFS, Kafka and NiFi...'
-Invoke-ZtmCompose @('up', '-d', '--build')
+Invoke-ZtmCompose @('up', '-d', '--build', '--remove-orphans')
 
 Write-Host '[2/7] Preparing Kafka topics...'
 for ($i = 0; $i -lt 45; $i++) {
@@ -37,7 +37,7 @@ foreach ($topic in @('gps','weather','air_quality')) {
         '--topic',$topic,'--partitions','3','--replication-factor','1')
 }
 
-Write-Host '[3/7] Initializing HDFS and Hive...'
+Write-Host '[3/7] Initializing HDFS and building Spark batch image...'
 for ($i = 0; $i -lt 60; $i++) {
     $status = & docker compose -f docker-compose.yml exec -T namenode hdfs dfsadmin -safemode get 2>$null
     if ($LASTEXITCODE -eq 0 -and ($status -join ' ') -match 'OFF') { break }
@@ -45,29 +45,18 @@ for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Seconds 2
 }
 $raw = @('gps','weather','air_quality','gtfs')
-$cleaned = @('gps_observations','weather_observations','air_quality_observations','gtfs_routes',
-    'gtfs_stops','gtfs_trips','gtfs_stop_times','gtfs_calendar','gtfs_calendar_dates')
-$paths = @('/data/warehouse','/data/raw','/data/cleaned')
+$cleaned = @('gps_observations','weather_observations','air_quality_observations')
+$paths = @('/data/raw','/data/cleaned','/data/enriched','/data/enriched/gtfs_trip_services')
 $paths += $raw | ForEach-Object { "/data/raw/$_" }
 $cleanedPaths = @($cleaned | ForEach-Object { "/data/cleaned/$_" })
 $paths += $cleanedPaths
 Invoke-ZtmCompose (@('exec','-T','namenode','hdfs','dfs','-mkdir','-p') + $paths)
-Invoke-ZtmCompose (@('exec','-T','namenode','hdfs','dfs','-chmod','775','/data/warehouse','/data/cleaned') + $cleanedPaths)
+Invoke-ZtmCompose (@('exec','-T','namenode','hdfs','dfs','-chmod','775',
+    '/data/cleaned','/data/enriched','/data/enriched/gtfs_trip_services') + $cleanedPaths)
 $state = '/data/cleaned/_pipeline_state'
-$statePaths = @($state,"$state/raw","$state/gtfs","$state/staging","$state/backups")
+$statePaths = @($state,"$state/raw","$state/gtfs","$state/enriched","$state/staging","$state/backups")
 Invoke-ZtmCompose (@('exec','-T','namenode','hdfs','dfs','-mkdir','-p') + $statePaths)
 Invoke-ZtmCompose (@('exec','-T','namenode','hdfs','dfs','-chmod','775') + $statePaths)
-Invoke-ZtmCompose @('--profile','analytics','up','-d','--build','hive-db','hive-metastore','hive-server2')
-for ($i = 0; $i -lt 80; $i++) {
-    & docker compose -f docker-compose.yml --profile analytics exec -T hive-server2 /opt/hive/bin/beeline -u 'jdbc:hive2://localhost:10000/default' -e 'SHOW DATABASES;' *> $null
-    if ($LASTEXITCODE -eq 0) { break }
-    if ($i -eq 79) { throw 'HiveServer2 is not ready.' }
-    Start-Sleep -Seconds 5
-}
-Invoke-ZtmCompose @('--profile','analytics','exec','-T','hive-server2','/opt/hive/bin/beeline',
-    '-u','jdbc:hive2://localhost:10000/default','-f','/opt/hive/project-sql/cleaned_tables.sql')
-Invoke-ZtmCompose @('--profile','analytics','exec','-T','hive-server2','/opt/hive/bin/beeline',
-    '-u','jdbc:hive2://localhost:10000/default','-f','/opt/hive/project-sql/refresh_partitions.sql')
 Invoke-ZtmCompose @('--profile','analytics','build','batch-runner')
 
 Write-Host '[4/7] Initializing NiFi in a Docker container...'
@@ -90,4 +79,4 @@ if ($WithSchedule) {
 } else {
     Invoke-ZtmCompose @('--profile','analytics','--profile','scheduler','stop','batch-scheduler')
 }
-Write-Host 'Bootstrap completed. NiFi: https://localhost:8443/nifi; Hive JDBC: localhost:10000.'
+Write-Host 'Bootstrap completed. NiFi: https://localhost:8443/nifi; HDFS: http://localhost:9870.'

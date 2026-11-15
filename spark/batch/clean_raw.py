@@ -125,7 +125,7 @@ def valid_coordinates(frame: DataFrame) -> DataFrame:
 def local_warsaw_to_utc(value):
     """Assume naive source timestamps use Europe/Warsaw; Spark runs in UTC.
 
-    Ambiguous timestamps during DST transitions need source-side validation.
+    Local timestamps near DST changes remain ambiguous without a source offset.
     """
     return F.to_utc_timestamp(
         F.to_timestamp(value, "yyyy-MM-dd HH:mm:ss"), "Europe/Warsaw"
@@ -389,7 +389,7 @@ def run_dataset(spark: SparkSession, name: str) -> bool:
 def main(dataset: str) -> None:
     # An experimental workaround for stalls with pending partitions and no
     # active tasks. Setting locality wait to zero does not change the data.
-    # It is configurable so the scheduling hypothesis can be tested/reverted.
+    # It is configurable so the scheduling setting can be adjusted.
     locality_wait = os.getenv("SPARK_LOCALITY_WAIT", "0s")
 
     spark = (

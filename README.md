@@ -2,162 +2,253 @@
 
 ## Project overview
 
-Big Data ZTM is a data engineering project focused on Warsaw's public transport network. It combines vehicle GPS observations, weather and air-quality measurements, and GTFS timetables to build a consistent historical view of transport operations and the conditions in which they take place. The resulting datasets provide a foundation for exploring vehicle movement, service reliability, and potential relationships between traffic conditions and the surrounding environment.
+This project builds a Docker-based data platform for Warsaw public transport.
+The Python source simulator buffers GPS observations and interpolates or carries
+forward weather and air-quality measurements to emulate live data sources.
+Apache NiFi receives these observations, stores JSON snapshots in HDFS Raw and
+publishes individual events to Kafka. NiFi also downloads Warsaw GTFS archives.
 
-The project implements a containerized pipeline for ingesting, storing, preparing, and querying these datasets. Apache NiFi handles ingestion and raw archival, Kafka receives individual observation records, Hadoop HDFS stores the historical data, Apache Spark performs incremental batch cleaning and deduplication, and Apache Hive exposes the resulting Parquet tables through SQL. The current milestone delivers this data foundation; delay modeling, advanced enrichment, and Spark Structured Streaming remain future work.
+Apache Spark processes stored data in two batch stages:
+
+1. **Raw → Cleaned:** clean and convert incoming JSON and GTFS data into
+   Snappy-compressed Parquet in HDFS.
+2. **Cleaned → Enriched:** combine GTFS trip, route and service-date data into
+   the `gtfs_trip_services` reference dataset.
+
+Both stages run in every full batch cycle. The optional Docker scheduler runs
+subsequent cycles every 15 minutes. Spark Structured Streaming, Cassandra,
+and delay prediction are planned, not implemented.
 
 ## Architecture
 
 ```text
 GPS / weather / air-quality APIs
-      ↓
-Source simulator (Python INSIDE Docker; optional)
-      ↓ HTTP snapshots
-NiFi ─────→ HDFS /data/raw/{gps,weather,air_quality} (full JSON snapshots)
-   └──────→ Kafka topics gps / weather / air_quality (individual records)
+                |
+       Python source simulator
+                |
+          NiFi ingestion ------------------ GTFS source ZIP
+           |           |                           |
+           v           v                           v
+       HDFS Raw      Kafka                   HDFS Raw GTFS
+           |                                       |
+           +-------------------+-------------------+
+                               |
+                  Spark Batch: Raw → Cleaned
+                               |
+                      HDFS /data/cleaned
+                               |
+                Spark Batch: Cleaned → Enriched
+                               |
+                      HDFS /data/enriched
 
-GTFS source ──→ NiFi (enabled by --with-data; initial fetch + daily 03:00)
-            ──→ HDFS /data/raw/gtfs/date=YYYY-MM-DD/*.zip
-
-HDFS Raw ──→ Docker batch runner (Spark 3.5 / HDFS business-key cleaning)
-          ──→ HDFS /data/cleaned/* (Snappy Parquet; date / feed_version)
-          ──→ Hive Metastore + HiveServer2 (external tables in cleaned.*)
-
-Optional batch-scheduler container ──→ identical batch runner every 15 minutes
+Planned online pipeline:
+Kafka + GTFS reference data from HDFS → Spark Structured Streaming → Cassandra
 ```
 
-The source simulator buffers GPS snapshots and interpolates environmental readings; it does **not** perform NiFi's ingestion, duplicate filtering, Kafka forwarding, or HDFS storage. Spark batch reads **HDFS Raw**, not Kafka. Both Spark and the Hive JDBC client run inside Docker. `batch-scheduler` runs its own Python standard-library clock (not host cron) and uses a shared Docker-volume file lock (not host `flock` or a Docker socket).
+The simulator only prepares upstream observations; NiFi handles ingestion,
+schema validation, duplicate detection, Kafka forwarding and Raw archiving.
+The complete pipeline and field-level contracts are described in
+[docs/data-contracts.md](docs/data-contracts.md).
 
-## Requirements
+## Data sources
 
-- Docker Desktop (with Linux containers) on **Windows 11**, or Docker Engine on **Linux**; Docker Compose v2.
-- For Linux / WSL: Bash. For Windows PowerShell: PowerShell 5.1+ or PowerShell 7.
-- Internet access for pulling/building Docker images and NiFi/API ingestion.
-- Enough memory and disk space to run NiFi, Kafka, Hadoop, Hive and Spark simultaneously.
+| Data | Source | Ingestion output |
+|---|---|---|
+| GPS | `https://mkuran.pl/gtfs/warsaw/positions.json` | HDFS Raw JSON and Kafka `gps` |
+| Weather | `https://dane.um.warszawa.pl/api/action/get_zom_pogoda` | HDFS Raw JSON and Kafka `weather` |
+| Air quality | `https://dane.um.warszawa.pl/api/action/get_bopipk_monitoring_jakosci_powietrza` | HDFS Raw JSON and Kafka `air_quality` |
+| GTFS | `https://mkuran.pl/gtfs/warsaw.zip` | ZIP archived in HDFS Raw; cleaned Parquet in HDFS |
 
-**Not required on the host:** Python, pip, `requests`, Java, Spark, Hive, cron, or `flock`. The optional scheduler does not need WSL to run independently: Docker Desktop itself must remain running.
+The weather and air-quality APIs require a municipal API token. Refer to the
+GTFS provider's licensing terms and `attributions.txt` before republishing data.
 
-### Configuration
+## Requirements and configuration
 
-On Linux / WSL:
+- Docker Engine with Docker Compose v2 (Docker Desktop + WSL2 is supported).
+- Sufficient RAM and free Docker disk space for NiFi, Kafka, HDFS and Spark.
+  GTFS processing requires temporary disk space for extracted CSV files.
+- Network access to source APIs when data acquisition is enabled.
+- No host Python, Java, Spark or cron installation is required.
+
+Create the environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-On Windows PowerShell:
+Set `NIFI_USERNAME`, `NIFI_PASSWORD` and `NIFI_SENSITIVE_PROPS_KEY` to
+non-placeholder values. The password and sensitive properties key must each
+have at least 12 characters. Set `WEATHER_API_TOKEN` to enable data acquisition.
+Do not commit `.env`.
+
+## Start the project
+
+Run commands from the project root (`~/projects/big-data-ztm` on WSL).
+
+```bash
+# Infrastructure + one full Spark batch
+bash scripts/bootstrap.sh
+
+# Infrastructure + simulator + GTFS acquisition + one full batch
+bash scripts/bootstrap.sh --with-data
+
+# Full startup with recurring batches every 15 minutes
+bash scripts/bootstrap.sh --with-data --with-schedule
+```
+
+Acquisition and scheduling are independent. You can also enable recurring
+batches without the simulator using `--with-schedule`. Bootstrap always
+executes one full batch cycle. `--with-data` requires `WEATHER_API_TOKEN` and
+requests the initial GTFS download if it is not yet present in HDFS. The NiFi
+GTFS download is then scheduled daily at 03:00 (Europe/Warsaw).
+
+Windows PowerShell alternatives:
 
 ```powershell
-Copy-Item .env.example .env
+.\scripts\bootstrap.ps1
+.\scripts\bootstrap.ps1 -WithData -WithSchedule
 ```
 
-Edit `.env` and configure `NIFI_USERNAME`, `NIFI_PASSWORD`, `NIFI_SENSITIVE_PROPS_KEY`, and `HIVE_DB_PASSWORD`. `WEATHER_API_TOKEN` is required only for `--with-data` / `-WithData` (which enables both the simulator and GTFS acquisition). Never commit `.env` or overwrite it while upgrading. The development Compose project uses the fixed project name `big-data-ztm`; do not start a second copy using the same project name against the same Docker daemon.
+## Operations: monitoring and control
 
-## First startup — choose the optional components
-
-All startup modes launch HDFS, Kafka, NiFi, PostgreSQL/Hive Metastore/HiveServer2, initialize the nine Hive tables and NiFi flows, and run **one** incremental Spark/Hive/GTFS batch immediately. The scheduler starts only when selected; it is not needed for that first batch.
-
-| Data acquisition (simulator + GTFS) | Batch scheduler | Linux / WSL Bash | Windows PowerShell |
-|---|---|---|---|
-| Off | Off | `bash scripts/bootstrap.sh` | `.\scripts\bootstrap.ps1` |
-| On | Off | `bash scripts/bootstrap.sh --with-data` | `.\scripts\bootstrap.ps1 -WithData` |
-| Off | On | `bash scripts/bootstrap.sh --with-schedule` | `.\scripts\bootstrap.ps1 -WithSchedule` |
-| On | On | `bash scripts/bootstrap.sh --with-data --with-schedule` | `.\scripts\bootstrap.ps1 -WithData -WithSchedule` |
-
-`--no-data` and `--no-schedule` (`-NoData` and `-NoSchedule`) are explicit alternatives to the off-by-default settings. Re-running bootstrap applies your choices to already-running optional services. It **does not remove HDFS/Kafka/Hive volumes**. GTFS downloads are **disabled** unless data acquisition is enabled. The NiFi GTFS process group is still imported in both modes, but its processors do not run when data acquisition is off.
-
-When `--with-data` is selected, `start-data` enables the NiFi GTFS flow and its daily 03:00 (Europe/Warsaw) trigger. If HDFS has no nonempty `.zip` under `/data/raw/gtfs/`, the NiFi `Generate GTFS Trigger` is run once immediately; startup waits up to 300 seconds for the archive to appear before the initial Spark batch. An existing archived ZIP is reused, and no additional initial download is requested. Source outages or NiFi flow errors cause a clear startup error rather than silently claiming a successful initial fetch. Starting data acquisition later uses exactly the same behavior.
-
-**PowerShell execution policy:** If Windows blocks `.ps1` files, use a session-scoped policy or launch PowerShell with an appropriate policy permitted by your organization. No WSL or local Bash is required for the PowerShell path.
-
-## Toggle data ingestion and scheduling later
-
-Without restarting the core infrastructure:
-
-| Operation | Linux / WSL Bash | Windows PowerShell |
-|---|---|---|
-| Start data acquisition (simulator + GTFS) | `bash scripts/start-data.sh` | `.\scripts\start-data.ps1` |
-| Stop data acquisition (simulator + GTFS) | `bash scripts/stop-data.sh` | `.\scripts\stop-data.ps1` |
-| Start 15-minute batch scheduler | `bash scripts/start-schedule.sh` | `.\scripts\start-schedule.ps1` |
-| Stop batch scheduler | `bash scripts/stop-schedule.sh` | `.\scripts\stop-schedule.ps1` |
-| Run one complete batch now | `bash scripts/run-scheduled.sh` | `.\scripts\run-batch.ps1` |
-| Run GPS batch only | `bash scripts/clean-batch.sh gps` | `.\scripts\run-batch.ps1 -Dataset gps` |
-| Run GTFS batch only | `bash scripts/clean-gtfs.sh` | `.\scripts\run-batch.ps1 -Dataset gtfs` |
-| Repair Hive partitions | `bash scripts/refresh-hive.sh` | `.\scripts\refresh-hive.ps1` |
-
-For a targeted GTFS toggle test, start from the existing (initialized) stack with data acquisition off, run `bash scripts/start-data.sh`, inspect HDFS for `/data/raw/gtfs/date=.../*.zip`, and run `bash scripts/stop-data.sh`. Neither command affects the 15-minute batch scheduler. To process the newly archived ZIP immediately without waiting for that scheduler, use `bash scripts/run-scheduled.sh` (or `./scripts/run-batch.ps1` in PowerShell).
-
-`install-schedule.sh` and `remove-schedule.sh` are compatibility aliases for the new Docker `start-schedule.sh` and `stop-schedule.sh`. They do **not** install or remove a crontab entry.
-
-The Docker scheduler aligns to `:00`, `:15`, `:30`, and `:45` minutes and attempts one complete cycle. A cycle that overlaps an existing manual/scheduled batch is skipped via the shared container lock. Docker Compose writes scheduler logs to the container log stream:
+### Container status
 
 ```bash
-docker compose --profile analytics --profile scheduler logs -f batch-scheduler
+# All main services, including optional simulator and scheduler
+docker compose --profile ingestion --profile scheduler ps -a
+
+# Simulator status
+docker compose --profile ingestion ps -a simulator
+
+# Scheduler status
+docker compose --profile scheduler ps -a batch-scheduler
 ```
 
-The same command works in PowerShell. Stopping Docker Desktop/Engine prevents future runs; missed cycles are not replayed individually, but the next run processes the accumulated unprocessed Raw files.
-
-**Migrating from the old WSL cron scheduler:** Remove any legacy `# BIG_DATA_ZTM_BATCH_SCHEDULER` crontab entry to prevent double executions. `bootstrap.sh` removes that tagged entry automatically **if** `crontab` happens to be installed. PowerShell cannot manage WSL crontab; remove it in WSL once if you previously installed it.
-
-## How a batch works
-
-The `batch-runner` and `batch-scheduler` services use **the same image**. Each iteration starts a single Spark application, in which:
-
-1. New immutable archived JSON files are identified through persistent HDFS manifests.
-2. GPS, weather and air-quality records are validated, deduplicated by business key and merged with any existing cleaned date partitions using staged HDFS renames.
-3. The Hive metadata for cleaned partitions is refreshed via Beeline in the same Docker image.
-4. Any unprocessed GTFS ZIP is downloaded into the Spark container, parsed, and written to `feed_version=...` Parquet partitions. Each archive receives a persistent HDFS completion marker **only after Hive refresh succeeds**.
-
-The schedule is independent of acquisition: with `--with-schedule` but without `--with-data`, only previously archived Raw files are processed, and no new GTFS download is initiated. A run with no new files is a safe no-op apart from Hive metadata repair. The GTFS ZIP archive marker is now derived from the HDFS path, length and modification timestamp as returned by the Hadoop API; when migrating from the old host script, existing ZIP archives may be processed **once more**, writing the same content-addressed `feed_version` path. This should not create duplicate versions.
-
-Manual Bash usage (from an already initialized project):
+### Live logs
 
 ```bash
-bash scripts/clean-batch.sh all
-bash scripts/clean-gtfs.sh --force hdfs://namenode:8020/data/raw/gtfs/date=YYYY-MM-DD/archive.zip
-bash scripts/refresh-hive.sh
+# Follow the data simulator (API polling, buffering and sends to NiFi)
+docker compose --profile ingestion logs -f --tail=100 simulator
+
+# Follow the batch scheduler and successive Spark batch runs
+docker compose --profile scheduler logs -f --tail=100 batch-scheduler
+
+# NiFi application logs
+docker compose logs -f --tail=100 nifi
+
+# Last 100 scheduler log lines, without live following
+docker compose --profile scheduler logs --tail=100 batch-scheduler
 ```
 
-## Querying Hive
+Use `Ctrl+C` to stop following logs; the containers keep running. The simulator
+buffers observations for approximately 15 minutes, so newly started acquisition
+may not immediately produce GPS messages in NiFi, Kafka or HDFS.
+
+### Start and stop data acquisition and scheduling
 
 ```bash
-docker compose --profile analytics exec -T hive-server2 \
-  /opt/hive/bin/beeline -u 'jdbc:hive2://localhost:10000/default' \
-  -e 'SHOW PARTITIONS cleaned.gps_observations; SELECT COUNT(*) FROM cleaned.gps_observations;'
+bash scripts/start-data.sh       # start simulator and NiFi GTFS acquisition
+bash scripts/stop-data.sh        # stop simulator and NiFi GTFS acquisition
+bash scripts/start-schedule.sh   # enable 15-minute batch scheduler
+bash scripts/stop-schedule.sh    # disable scheduler, keep core services running
 ```
 
-Nine Hive external tables exist: `cleaned.gps_observations`, `cleaned.weather_observations`, `cleaned.air_quality_observations`, `cleaned.gtfs_routes`, `cleaned.gtfs_stops`, `cleaned.gtfs_trips`, `cleaned.gtfs_stop_times`, `cleaned.gtfs_calendar`, and `cleaned.gtfs_calendar_dates`. GPS/weather/air-quality tables use partition `date` (UTC observation date); GTFS tables use `feed_version`. Optional GTFS calendar files may legitimately be absent.
+### Run batches manually
 
-Hive 4 in this demonstration uses local MapReduce for some queries. Warnings about deprecated Hive-on-MR or multiple SLF4J bindings can appear even when SQL succeeds. Success must be determined from the exit status and results.
+```bash
+bash scripts/run-scheduled.sh     # one full Raw → Cleaned → Enriched cycle
+bash scripts/clean-gtfs.sh        # process newly available GTFS archives
+bash scripts/clean-gtfs.sh --force # reprocess GTFS archives
+bash scripts/clean-batch.sh gps    # only GPS cleaning
+bash scripts/clean-batch.sh weather
+bash scripts/clean-batch.sh air_quality
+```
 
-## Services and troubleshooting
+Targeted cleaning commands are for maintenance; the scheduled cycle runs both
+batch stages. A shared lock prevents overlapping scheduled and manual runs.
 
-| Service | Host endpoint / command |
-|---|---|
-| NiFi | https://localhost:8443/nifi |
-| NameNode UI | http://localhost:9870 |
-| Kafka | `localhost:9092` |
-| HiveServer2 | `jdbc:hive2://localhost:10000/default` |
-| Batch scheduler | `docker compose --profile analytics --profile scheduler logs batch-scheduler` |
-| One-off Spark | `docker compose --profile analytics run --rm --no-deps batch-runner` |
+### Inspect data in HDFS
 
-Host ports are bound to `127.0.0.1` in the supplied Compose configuration. Use `docker compose --profile analytics --profile scheduler --profile ingestion ps -a` to inspect all services.
+```bash
+# List datasets
+docker compose exec -T namenode hdfs dfs -ls /data/raw
+docker compose exec -T namenode hdfs dfs -ls /data/cleaned
+docker compose exec -T namenode hdfs dfs -ls /data/enriched
 
-To shut down optional ingestion or scheduling without losing data, use the corresponding `stop-*.sh` / `stop-*.ps1` script. **Do not run `docker compose down -v` unless you intentionally want to delete persistent data.** Raw archive files are append-only: editing or removing a processed file causes the Spark manifest check to fail instead of silently accepting inconsistent derived data. Do not delete `/data/cleaned/_pipeline_state/` without a recovery plan.
+# Total sizes by dataset (not the zero directory size shown by -ls)
+docker compose exec -T namenode hdfs dfs -du -s -h '/data/raw/*' '/data/cleaned/*' '/data/enriched/*'
+
+# See all GTFS source archives and cleaned trip partitions
+docker compose exec -T namenode hdfs dfs -ls -R /data/raw/gtfs
+docker compose exec -T namenode hdfs dfs -ls -R /data/cleaned/gtfs_trips
+```
+
+To display Parquet rows, use a Spark session connected to HDFS:
+
+```python
+trips = spark.read.parquet('hdfs://namenode:8020/data/cleaned/gtfs_trips/')
+trips.show(20, truncate=False)
+```
+
+### Web interfaces
+
+- NiFi: <https://localhost:8443/nifi> (credentials from `.env`).
+- HDFS NameNode and file browser: <http://localhost:9870>.
+
+### Stop the project
+
+```bash
+# Stop acquisition and the recurring scheduler independently
+bash scripts/stop-data.sh
+bash scripts/stop-schedule.sh
+
+# Stop all Compose services, preserving stored data volumes
+docker compose --profile ingestion --profile analytics --profile scheduler down --remove-orphans
+```
+
+Do not use `down -v` unless you intend to delete persistent NiFi, Kafka and
+HDFS data. For an existing NiFi instance, updating the exported flow JSON file
+does not automatically replace a flow already imported into NiFi.
+
+## HDFS datasets
+
+```text
+/data/raw/gps|weather|air_quality/       JSON snapshots archived by NiFi
+/data/raw/gtfs/date=YYYY-MM-DD/*.zip     GTFS source archives
+/data/cleaned/gps_observations/date=YYYY-MM-DD/
+/data/cleaned/weather_observations/date=YYYY-MM-DD/
+/data/cleaned/air_quality_observations/date=YYYY-MM-DD/
+/data/cleaned/gtfs_<table>/feed_version=<version>/
+/data/enriched/gtfs_trip_services/feed_version=<version>/
+/data/cleaned/_pipeline_state/          Batch state and processing markers
+```
+
+GTFS partitions must be read consistently by `feed_version`. For the complete
+list of supported GTFS source files, schemas, transformations and the Enriched
+join rules, see [docs/data-contracts.md](docs/data-contracts.md).
+
+## Implementation status
+
+**Implemented:** source simulation, NiFi ingestion and GTFS download, Kafka
+topics, HDFS Raw, Spark cleaning to Parquet, GTFS trip/service enrichment,
+and the Docker batch scheduler.
+
+**Planned:** GPS-to-GTFS trip/stop matching, delay metrics, environmental
+features, predictions, Spark Structured Streaming and Cassandra storage.
+Streaming will consume live events from Kafka and GTFS reference data from
+HDFS.
 
 ## Repository structure
 
 ```text
-acquisition/            Optional source simulator (Python inside Docker)
-nifi/flows/             Versioned NiFi flow definition
-spark/batch/            JSON and GTFS cleaners + combined Spark batch pipeline
-spark/downstream/       Future enrichment and delay-modeling scaffold
-spark/streaming/        Future Kafka streaming integration
-docker/batch/           Spark + Hive client image for one-off/scheduled runs
-docker/nifi-init/       One-off NiFi bootstrap with bundled Python requests
-hive/sql/               Hive DDL and partition metadata repair
-scripts/                Bash and PowerShell entry points, Docker scheduler
-docs/data-contracts.md  Detailed implemented and planned data contracts
+acquisition/             Upstream source simulator
+docker/                  Docker images
+docker-compose.yml       Infrastructure and optional services
+nifi/flows/              Exported NiFi ingestion and GTFS flow
+spark/batch/             Raw → Cleaned and batch orchestration
+spark/downstream/        Cleaned → Enriched reference data
+spark/streaming/         Planned streaming implementation
+scripts/                 Bootstrap, manual jobs and service controls
+docs/data-contracts.md   Sources, schemas and transformation contracts
+docs/milestone 1/        Milestone 1 report and diagrams
 ```
-
-See [data contracts](docs/data-contracts.md) for fields, keys, timestamps, partition schemas, guarantees, and limitations. See [review notes](docs/REVIEW-NOTES.md) for the refactor decisions and deployment caveats.
