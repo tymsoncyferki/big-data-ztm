@@ -185,6 +185,22 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # sends healthchecks.io pings every 15 minutes (URLs from .env)
+  heartbeat:
+    profiles: ["scheduler"]
+    image: apache/hadoop:3.4.3
+    command: ["bash", "/opt/project/scripts/heartbeat.sh"]
+    env_file: ./hadoop.env
+    environment:
+      HC_DOCKER_URL: "${HC_DOCKER_URL:-}"
+      HC_DATA_URL: "${HC_DATA_URL:-}"
+    volumes:
+      - ./scripts/heartbeat.sh:/opt/project/scripts/heartbeat.sh:ro
+    depends_on:
+      namenode:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   nifi_conf:
   nifi_content_repository:

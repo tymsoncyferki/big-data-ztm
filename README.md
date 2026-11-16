@@ -236,6 +236,15 @@ GTFS partitions must be read consistently by `feed_version`. For the complete
 list of supported GTFS source files, schemas, transformations and the Enriched
 join rules, see [docs/data-contracts.md](docs/data-contracts.md).
 
+## Healthcheck alerts
+
+It is possible to set up healthcheck alerts. One has to create jobs on healthchecks.io
+and add corresponding links to the env. The `Heartbeat` service will ping the URLs every 15 minutes.
+There are two types of jobs:
+- `HC_DOCKER_URL` - always pinged, shows that docker and the stack are up
+- `HC_DATA_URL` - pinged only when a new GPS snapshot landed in HDFS since the last check (confirms that NIFI is working)
+Alerts and grace time are configured on the healthcheck.io website.
+
 ## Implementation status
 
 **Implemented:** source simulation, NiFi ingestion and GTFS download, Kafka
