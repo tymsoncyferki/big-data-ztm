@@ -245,6 +245,47 @@ There are two types of jobs:
 - `HC_DATA_URL` - pinged only when a new GPS snapshot landed in HDFS since the last check (confirms that NIFI is working)
 Alerts and grace time are configured on the healthcheck.io website.
 
+## Recovery after a hard restart
+
+If WSL or the PC was killed (crash, out of memory, Windows update), the stack
+may come back up but no new data reaches HDFS. Check these in order:
+
+1. All containers are running (none `Exited`). Docker does not restart a
+   container that fails right at startup, so start it manually:
+
+   ```bash
+   docker compose --profile ingestion --profile scheduler ps -a
+   docker compose up -d nifi   # example for a container that did not start
+   ```
+
+2. HDFS is not stuck in safe mode (reads work, but all writes are rejected):
+
+   ```bash
+   docker compose exec namenode hdfs dfsadmin -safemode get
+   docker compose exec namenode hdfs fsck / | tail -20   # Missing/Corrupt blocks should be 0
+   docker compose exec namenode hdfs dfsadmin -safemode leave
+   ```
+
+   If `fsck` shows corrupt blocks, list them with `hdfs fsck / -list-corruptfileblocks`
+   before deleting anything.
+
+3. NiFi has no errors on processors (e.g. `ContentNotFoundException` or
+   `FlowFile ... is not known`). These come from broken queues. Empty all queues
+   in the NiFi UI, and if errors come back, reset the queues with:
+
+   ```bash
+   bash scripts/reset-nifi.sh
+   ```
+
+   Do not stop the simulator during this, it keeps unsent GPS snapshots in memory
+   (up to `GPS_BUFFER_MAX_HOURS`) and resends them when NiFi is back.
+
+4. New GPS files appear in HDFS:
+
+   ```bash
+   docker compose exec namenode hdfs dfs -ls -R /data/raw/gps | tail -3
+   ```
+
 ## Implementation status
 
 **Implemented:** source simulation, NiFi ingestion and GTFS download, Kafka

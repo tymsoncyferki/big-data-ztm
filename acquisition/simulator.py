@@ -47,6 +47,9 @@ BUFFER_SECONDS = 15 * 60
 ENVIRONMENT_SECONDS = 30
 RETRY_SECONDS = 5
 HISTORY_HOURS = 8  # Retain a previous reading for carry-forward
+# Max GPS snapshots kept in memory while NiFi is down (oldest are dropped above it)
+GPS_BUFFER_MAX_HOURS = float(os.getenv("GPS_BUFFER_MAX_HOURS", "2"))
+GPS_BUFFER_MAX_SNAPSHOTS = int(GPS_BUFFER_MAX_HOURS * 3600 / GPS_POLL_SECONDS)
 
 WEATHER_FIELDS = (
     "temp_pow", "temp_naw", "wilg_pow", "pred_wiatru", "kier_wiatru", "int_opadu"
@@ -177,6 +180,10 @@ class SourceHistory:
 
     def add_gps(self, snapshot: dict, *, received_at: float | None = None) -> None:
         self.gps.append((time.monotonic() if received_at is None else received_at, snapshot))
+        while len(self.gps) > GPS_BUFFER_MAX_SNAPSHOTS:
+            self.gps.popleft()
+            LOG.warning("GPS buffer full (%d snapshots); dropped the oldest one",
+                        GPS_BUFFER_MAX_SNAPSHOTS)
 
     def add_weather(self, records: list[dict]) -> None:
         for record in records:

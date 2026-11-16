@@ -24,6 +24,7 @@ services:
     env_file: ./hadoop.env
     environment:
       ENSURE_NAMENODE_DIR: /data/name/current
+      TZ: Europe/Warsaw
     volumes:
       - hdfs_namenode:/data
     depends_on:
@@ -38,6 +39,8 @@ services:
     ports:
       - "127.0.0.1:9864:9864"
     env_file: ./hadoop.env
+    environment:
+      TZ: Europe/Warsaw
     volumes:
       - hdfs_datanode:/data
     depends_on:
@@ -69,6 +72,7 @@ services:
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
+      TZ: Europe/Warsaw
     volumes:
       - kafka_data:/var/lib/kafka/data
     restart: unless-stopped
@@ -122,7 +126,9 @@ services:
       NIFI_GPS_URL: "http://nifi:8081/gps"
       NIFI_WEATHER_URL: "http://nifi:8082/weather"
       NIFI_AIR_URL: "http://nifi:8083/air-quality"
+      GPS_BUFFER_MAX_HOURS: "${GPS_BUFFER_MAX_HOURS:-2}"
       TZ: Europe/Warsaw
+    mem_limit: "${SIMULATOR_MEM_LIMIT:-1g}"
     depends_on:
       nifi:
         condition: service_started
@@ -194,6 +200,7 @@ services:
     environment:
       HC_DOCKER_URL: "${HC_DOCKER_URL:-}"
       HC_DATA_URL: "${HC_DATA_URL:-}"
+      TZ: Europe/Warsaw
     volumes:
       - ./scripts/heartbeat.sh:/opt/project/scripts/heartbeat.sh:ro
     depends_on:
