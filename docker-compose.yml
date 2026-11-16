@@ -35,6 +35,8 @@ services:
     image: apache/hadoop:3.4.3
     hostname: datanode
     command: ["hdfs", "datanode"]
+    ports:
+      - "127.0.0.1:9864:9864"
     env_file: ./hadoop.env
     volumes:
       - hdfs_datanode:/data

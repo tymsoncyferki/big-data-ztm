@@ -195,6 +195,15 @@ trips.show(20, truncate=False)
 - NiFi: <https://localhost:8443/nifi> (credentials from `.env`).
 - HDFS NameNode and file browser: <http://localhost:9870>.
 
+Downloading files from the HDFS file browser redirects the browser to the DataNode (`http://datanode:9864/...`). For this to work, port 9864 has to be
+exposed in `docker-compose.yml` and the `datanode` name has to point to
+localhost. Add this line to the hosts file (on Windows
+`C:\Windows\System32\drivers\etc\hosts`, on Linux `/etc/hosts`):
+
+```text
+127.0.0.1 datanode
+```
+
 ### Stop the project
 
 ```bash
