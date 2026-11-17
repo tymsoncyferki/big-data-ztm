@@ -46,6 +46,10 @@ that cycle and catches up on the next one.
 
 ## Automatic refresh (part of the normal 15-minute batch)
 
+**Currently disabled:** `scripts/container_scheduler.py` passes `--skip-ml`, to keep the load low on
+the data collection machine. Build the dataset by hand with `bash scripts/build-ml-dataset.sh`.
+Remove `--skip-ml` there to turn the automatic stage back on.
+
 `spark/batch/run_pipeline.py` calls `spark/ml/ml_stage.py` as its last stage (after cleaning and GTFS
 enrichment), inside the same Spark application and the same batch lock. So `bootstrap.sh`,
 `run-scheduled.sh` and the Docker scheduler refresh the ML tables without any extra step.
