@@ -34,7 +34,8 @@ def list_archived_json(fs, jvm, source_dir):
     while files.hasNext():
         stat = files.next()
         name = stat.getPath().getName()
-        if name.endswith(".json"):
+        # skip hidden files
+        if name.endswith(".json") and not name.startswith((".", "_")):
             result[str(stat.getPath().toString())] = [
                 int(stat.getLen()), int(stat.getModificationTime())
             ]
