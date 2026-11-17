@@ -4,6 +4,7 @@ One normal cycle always checks both inputs in sequence:
   1. GPS/weather/air-quality JSON snapshots
   2. GTFS ZIP timetable feeds
   3. Cleaned -> Enriched (GTFS trip/service reference)
+  4. Cleaned -> Enriched (ML dataset: stop visits, delays, features; spark/ml)
 Individual dataset switches are maintenance/debug operations only.
 """
 
@@ -76,6 +77,7 @@ def main():
     parser.add_argument("--dataset", choices=["all", "gps", "weather", "air_quality", "gtfs"], default="all")
     parser.add_argument("--archive")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--skip-ml", action="store_true", help="do not refresh the ML dataset")
     args = parser.parse_args()
     spark = (SparkSession.builder.appName("big-data-ztm-batch-pipeline")
              .master("local[2]")
@@ -94,6 +96,14 @@ def main():
             run_gtfs(spark, args.archive, args.force)
             # Mandatory second stage of the normal full batch cycle.
             enrich_gtfs(spark, force=args.force)
+        if args.dataset == "all" and not args.skip_ml:                                  
+            # Final stage: ML dataset. It must never fail the cleaning cycle above.
+            sys.path.append(str(LocalPath(__file__).resolve().parents[1] / "ml"))
+            try:
+                from ml_stage import run_ml_stage
+                run_ml_stage(spark) 
+            except Exception:   
+                LOG.exception("ML dataset stage failed; cleaned data is not affected")
     finally:
         spark.stop()
 

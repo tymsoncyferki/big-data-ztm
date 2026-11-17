@@ -8,16 +8,25 @@ forward weather and air-quality measurements to emulate live data sources.
 Apache NiFi receives these observations, stores JSON snapshots in HDFS Raw and
 publishes individual events to Kafka. NiFi also downloads Warsaw GTFS archives.
 
-Apache Spark processes stored data in two batch stages:
+Apache Spark processes stored data in three batch stages:
 
 1. **Raw → Cleaned:** clean and convert incoming JSON and GTFS data into
    Snappy-compressed Parquet in HDFS.
 2. **Cleaned → Enriched:** combine GTFS trip, route and service-date data into
    the `gtfs_trip_services` reference dataset.
+3. **Cleaned → Enriched (ML dataset):** match GPS pings to GTFS stop times to
+   estimate the delay at every stop (`stop_visits`), then build one row per
+   vehicle per minute with motion, time, weather and air-quality features and
+   the delay 10 minutes ahead as the target (`ml_dataset`). Code is in
+   `spark/ml/`; definitions are in [docs/ml-dataset.md](docs/ml-dataset.md).
 
-Both stages run in every full batch cycle. The optional Docker scheduler runs
-subsequent cycles every 15 minutes. Spark Structured Streaming, Cassandra,
-and delay prediction are planned, not implemented.
+All three stages run in every full batch cycle, and the optional Docker
+scheduler runs subsequent cycles every 15 minutes. Stage 3 rebuilds only the
+last 2 UTC days and at most once an hour (`ML_STAGE_DAYS`,
+`ML_STAGE_MIN_INTERVAL_MIN`); a failure there is logged and never fails the
+cleaning stages. Use `bash scripts/build-ml-dataset.sh` for a full or
+historical rebuild. Historical statistics, model training, Spark Structured
+Streaming and Cassandra are planned, not implemented.
 
 ## Architecture
 
@@ -38,6 +47,7 @@ GPS / weather / air-quality APIs
                       HDFS /data/cleaned
                                |
                 Spark Batch: Cleaned → Enriched
+        (GTFS reference; stop visits, delays, ML features)
                                |
                       HDFS /data/enriched
 
@@ -68,7 +78,8 @@ GTFS provider's licensing terms and `attributions.txt` before republishing data.
 - Sufficient RAM and free Docker disk space for NiFi, Kafka, HDFS and Spark.
   GTFS processing requires temporary disk space for extracted CSV files.
 - Network access to source APIs when data acquisition is enabled.
-- No host Python, Java, Spark or cron installation is required.
+- No host Python, Java, Spark or cron installation is required to run the
+  pipeline (only to run the optional unit tests, see [Tests](#tests)).
 
 Create the environment file:
 
@@ -164,8 +175,39 @@ bash scripts/clean-batch.sh weather
 bash scripts/clean-batch.sh air_quality
 ```
 
-Targeted cleaning commands are for maintenance; the scheduled cycle runs both
+Targeted cleaning commands are for maintenance; the scheduled cycle runs all
 batch stages. A shared lock prevents overlapping scheduled and manual runs.
+
+### ML dataset: delays and features
+
+```bash
+bash scripts/profile-data.sh                 # read-only data check, incl. GPS vs GTFS trip_id match
+bash scripts/build-ml-dataset.sh             # build stop_visits and ml_dataset for all available days
+bash scripts/build-ml-dataset.sh --start-date 2026-11-16 --end-date 2026-11-17
+bash scripts/diagnose-delays.sh              # quality of the estimated delays and baselines
+bash scripts/show-sample.sh ml_dataset 5     # print a few rows (also: stop_visits)
+```
+
+The build also runs automatically as the last stage of every full batch cycle
+(`run-scheduled.sh`, `bootstrap.sh`, the scheduler).
+The commands above are for full rebuilds and checks.
+
+Run `profile-data.sh` first on new data: the build stops if no GPS `trip_id`
+exists in the GTFS timetable. Re-running a date range replaces exactly those
+`date=` partitions. The jobs wait for the shared batch lock, so they do not run
+while a cleaning cycle is rewriting partitions. Delay definition, target,
+leakage rules and every column are described in
+[docs/ml-dataset.md](docs/ml-dataset.md).
+
+### Tests
+
+```bash
+pip install pyspark==3.5.7 pytest      # needs Java 17 or 21 on the host
+python -m pytest tests -q
+```
+
+The tests use a small synthetic city with known delays and need neither Docker
+nor HDFS.
 
 ### Inspect data in HDFS
 
@@ -195,15 +237,6 @@ trips.show(20, truncate=False)
 - NiFi: <https://localhost:8443/nifi> (credentials from `.env`).
 - HDFS NameNode and file browser: <http://localhost:9870>.
 
-Downloading files from the HDFS file browser redirects the browser to the DataNode (`http://datanode:9864/...`). For this to work, port 9864 has to be
-exposed in `docker-compose.yml` and the `datanode` name has to point to
-localhost. Add this line to the hosts file (on Windows
-`C:\Windows\System32\drivers\etc\hosts`, on Linux `/etc/hosts`):
-
-```text
-127.0.0.1 datanode
-```
-
 ### Stop the project
 
 ```bash
@@ -229,6 +262,9 @@ does not automatically replace a flow already imported into NiFi.
 /data/cleaned/air_quality_observations/date=YYYY-MM-DD/
 /data/cleaned/gtfs_<table>/feed_version=<version>/
 /data/enriched/gtfs_trip_services/feed_version=<version>/
+/data/enriched/stop_visits/date=YYYY-MM-DD/   Delay at each stop visit (estimated from GPS)
+/data/enriched/ml_dataset/date=YYYY-MM-DD/    Features + 10-minute-ahead target per vehicle-minute
+/data/enriched/_ml_reports/                   JSON reports: counts and baselines per build
 /data/cleaned/_pipeline_state/          Batch state and processing markers
 ```
 
@@ -290,12 +326,14 @@ may come back up but no new data reaches HDFS. Check these in order:
 
 **Implemented:** source simulation, NiFi ingestion and GTFS download, Kafka
 topics, HDFS Raw, Spark cleaning to Parquet, GTFS trip/service enrichment,
-and the Docker batch scheduler.
+the Docker batch scheduler, GPS-to-GTFS matching with estimated delays at stops,
+the ML dataset (motion, time, weather and air-quality features and the target),
+data-quality tooling and unit tests.
 
-**Planned:** GPS-to-GTFS trip/stop matching, delay metrics, environmental
-features, predictions, Spark Structured Streaming and Cassandra storage.
-Streaming will consume live events from Kafka and GTFS reference data from
-HDFS.
+**Planned:** historical statistics and the weather-sensitivity ranking, model
+training, Spark Structured Streaming and Cassandra storage. Streaming will
+consume live events from Kafka and GTFS reference data from HDFS, and will reuse
+the delay and feature definitions of `spark/ml`.
 
 ## Repository structure
 
@@ -306,8 +344,11 @@ docker-compose.yml       Infrastructure and optional services
 nifi/flows/              Exported NiFi ingestion and GTFS flow
 spark/batch/             Raw → Cleaned and batch orchestration
 spark/downstream/        Cleaned → Enriched reference data
+spark/ml/                Delay estimation, features and ML dataset (Cleaned → Enriched)
 spark/streaming/         Planned streaming implementation
 scripts/                 Bootstrap, manual jobs and service controls
+tests/                   Unit and integration tests on a synthetic city
 docs/data-contracts.md   Sources, schemas and transformation contracts
+docs/ml-dataset.md       Delay definition, ML columns, leakage rules, tests
 docs/milestone 1/        Milestone 1 report and diagrams
 ```
