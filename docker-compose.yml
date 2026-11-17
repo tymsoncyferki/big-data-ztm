@@ -24,7 +24,9 @@ services:
     env_file: ./hadoop.env
     environment:
       ENSURE_NAMENODE_DIR: /data/name/current
+      HADOOP_HEAPSIZE_MAX: "768m"
       TZ: Europe/Warsaw
+    mem_limit: 1g
     volumes:
       - hdfs_namenode:/data
     depends_on:
@@ -40,7 +42,9 @@ services:
       - "127.0.0.1:9864:9864"
     env_file: ./hadoop.env
     environment:
+      HADOOP_HEAPSIZE_MAX: "512m"
       TZ: Europe/Warsaw
+    mem_limit: 768m
     volumes:
       - hdfs_datanode:/data
     depends_on:
@@ -72,7 +76,9 @@ services:
       KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
       TZ: Europe/Warsaw
+    mem_limit: 768m
     volumes:
       - kafka_data:/var/lib/kafka/data
     restart: unless-stopped
@@ -97,6 +103,8 @@ services:
       SINGLE_USER_CREDENTIALS_USERNAME: "${NIFI_USERNAME:?Set NIFI_USERNAME in .env}"
       SINGLE_USER_CREDENTIALS_PASSWORD: "${NIFI_PASSWORD:?Set NIFI_PASSWORD in .env}"
       NIFI_SENSITIVE_PROPS_KEY: "${NIFI_SENSITIVE_PROPS_KEY:?Set NIFI_SENSITIVE_PROPS_KEY in .env}"
+    # heap 1g + metaspace and other off-heap memory
+    mem_limit: 2g
     depends_on:
       - namenode
       - kafka
@@ -163,6 +171,7 @@ services:
       dockerfile: docker/batch/Dockerfile
     image: big-data-ztm-batch:latest
     command: ["python3", "-u", "/opt/project/scripts/container_scheduler.py", "--once"]
+    mem_limit: 3g
     environment: &batch_environment
       PYSPARK_PYTHON: python3
       PYTHONUNBUFFERED: "1"
@@ -184,6 +193,7 @@ services:
     profiles: ["scheduler"]
     image: big-data-ztm-batch:latest
     command: ["python3", "-u", "/opt/project/scripts/container_scheduler.py", "--loop"]
+    mem_limit: 3g
     environment: *batch_environment
     volumes: *batch_volumes
     depends_on:
@@ -200,7 +210,9 @@ services:
     environment:
       HC_DOCKER_URL: "${HC_DOCKER_URL:-}"
       HC_DATA_URL: "${HC_DATA_URL:-}"
+      HADOOP_HEAPSIZE_MAX: "256m"
       TZ: Europe/Warsaw
+    mem_limit: 512m
     volumes:
       - ./scripts/heartbeat.sh:/opt/project/scripts/heartbeat.sh:ro
     depends_on:
