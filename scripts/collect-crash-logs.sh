@@ -25,10 +25,10 @@ for c in $(docker ps -a --filter label=com.docker.compose.project=big-data-ztm -
   docker inspect -f '{{.Name}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} restarts={{.RestartCount}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}' "$c"
 done > "$out/containers-state.txt"
 
-# journal from the previous boot (only if journald storage is persistent)
+# journal from the window, any boot (only if journald storage is persistent)
 journalctl --list-boots > "$out/boots.txt" 2>&1
-journalctl -b -1 --since "$1" --until "$2" > "$out/journal-prev-boot.log" 2>&1
-journalctl -k -b -1 > "$out/kernel-prev-boot.log" 2>&1
+journalctl --since "$1" --until "$2" > "$out/journal.log" 2>&1
+journalctl -k --since "$1" --until "$2" > "$out/kernel.log" 2>&1
 
 # NiFi logs are in a volume, rotated files are named nifi-app_YYYY-MM-DD_HH.N.log
 day=$(date -d "$1" +%Y-%m-%d)
