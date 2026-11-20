@@ -1,26 +1,19 @@
 # ML dataset: delays, features and target
 
-This layer turns the **cleaned** Parquet data into tables a model can learn from.
-It reads `/data/cleaned/*`, writes only under `/data/enriched/`.
-
-```text
-/data/cleaned/gps_observations, weather_observations, air_quality_observations, gtfs_*
-        │  spark/ml/build_ml_dataset.py   (automatic stage of the 15-minute batch, or manual)
-        ▼
-/data/enriched/stop_visits/date=YYYY-MM-DD/          one row per (trip, vehicle, stop) visit, with its delay
-/data/enriched/ml_dataset/date=YYYY-MM-DD/           one row per vehicle per minute: features + target
-/data/enriched/_ml_reports/                          JSON reports (counts, baselines) for the project report
-```
+This layer turns the **cleaned** Parquet data into tables a model can learn from, and prepares the
+timetable lookup that the streaming job will use.
+It reads `/data/cleaned/*` (and `/data/enriched/gtfs_trip_services`), writes only under `/data/enriched/`.
 
 ## Programs and scripts
 
 | Script (`scripts/`) | Python file (`spark/ml/`) | Purpose |
 |---|---|---|
 | `profile-data.sh` | `profile_data.py` | Read-only data check: rows per day, GTFS feeds, **GPS `trip_id` vs GTFS match rate** |
-| `build-ml-dataset.sh` | `build_ml_dataset.py` | Build `stop_visits` and `ml_dataset` (full or date-limited rebuild) |
+| `build-ml-dataset.sh` | `build_ml_dataset.py` | Build `stop_visits` and `ml_dataset` (full or date-limited rebuild, one day at a time) |
 | `diagnose-delays.sh` | `diagnose_delays.py` | Quality of the estimated delays: distributions, first/last stops, trams vs buses, baselines |
-| `show-sample.sh` | `show_sample.py` | Print a few readable rows of `stop_visits` or `ml_dataset` |
-| (called by the pipeline) | `ml_stage.py` | Automatic, throttled refresh inside the 15-minute batch |
+| `show-sample.sh` | `show_sample.py` | Print a few readable rows of `stop_visits`, `ml_dataset` or `schedule_stops` |
+| (called by the pipeline) | `ml_stage.py` | Automatic refresh inside the 15-minute batch (timetable lookup every cycle, ML dataset throttled) |
+| (called by `ml_stage.py`) | `schedule_stops.py` | Build the timetable lookup `schedule_stops` for Spark Structured Streaming |
 
 Shared code: `ml_common.py` (Spark settings, distance, grid, service-day start, HDFS helpers, batch lock),
 `delay_estimation.py` (delay definition), `feature_engineering.py` (features, target, weather/air joins).
@@ -32,39 +25,50 @@ bash scripts/profile-data.sh                 # 1. check the data (run first on n
 bash scripts/build-ml-dataset.sh             # 2. build everything that is available
 bash scripts/build-ml-dataset.sh --start-date 2026-11-16 --end-date 2026-11-17
 bash scripts/diagnose-delays.sh              # 3. check the quality of the delays
-bash scripts/show-sample.sh ml_dataset 5     # 4. look at a few rows (or: stop_visits; --route 175)
+bash scripts/show-sample.sh ml_dataset 5     # 4. look at a few rows (or: stop_visits, schedule_stops; --route 175)
 ```
 
 Options of the build (all optional): `--stop-radius-m 75`, `--max-abs-delay-s 7200`,
 `--dwell-tolerance-m 10`, `--ping-interval-s 60`, `--horizon-min 10`, `--horizon-tolerance-s 300`,
 `--confirm-lag-s 30`, `--air-params PM10,PM2.5,NO2`, `--feed-version <v>` (force one GTFS feed), `--no-lock`.
 
-The build goes one day at a time (one Spark job per `date=`), so a long history does not run out of memory.
+The build goes one day at a time (one Spark job per `date=`). A day that cannot be built (for example
+no GPS data or no matching GTFS feed) is reported as an error in the printed per-day statistics and
+does not stop the other days.
+
 Re-running a date range replaces exactly those `date=` partitions (idempotent). All scripts take the
 same lock as the 15-minute cleaning scheduler, so they never read partitions while cleaning rewrites
 them: if cleaning is running, the job waits (up to 45 min); if the job is running, the scheduler skips
 that cycle and catches up on the next one.
 
-## Automatic refresh (part of the normal 15-minute batch)
+## Timetable lookup `schedule_stops` (for Spark Structured Streaming)
 
-`spark/batch/run_pipeline.py` calls `spark/ml/ml_stage.py` as its last stage (after cleaning and GTFS
-enrichment), inside the same Spark application and the same batch lock. So `bootstrap.sh`,
-`run-scheduled.sh` and the Docker scheduler refresh the ML tables without any extra step.
+A live GPS ping contains only a `trip_id`, a position and a time. To estimate its delay, a streaming job
+needs the scheduled stops of that trip. `schedule_stops` is that lookup, prepared once per service date so
+that streaming does not have to join several GTFS tables for every micro-batch.
 
-* Only the last `ML_STAGE_DAYS` (default 2) UTC days are rebuilt, one day at a time, and at most every
-  `ML_STAGE_MIN_INTERVAL_MIN` (default 720, i.e. 12 h) minutes (a marker file
-  `/data/enriched/_ml_reports/last_stage_run.json` records the last success); older partitions are left alone.
-  To change the defaults, pass the variables to the container, e.g. add
-  `ML_STAGE_MIN_INTERVAL_MIN: "${ML_STAGE_MIN_INTERVAL_MIN:-720}"` to the `batch_environment` block of
-  `docker-compose.yml` and set the value in `.env`.
-* Because of the throttle, the ML tables change about twice a day even though cleaning runs every
-  15 minutes. The newest rows have no target yet (it needs a stop visit 10+ minutes later) and get it
-  on the next rebuild. With 2 days and 12 hours, every UTC day is rebuilt at least once after it has
-  ended, so it ends up complete. If a run fails, no marker is written and the next 15-minute cycle
-  tries again.
-* The first run after installation only covers the last 2 days: run `bash scripts/build-ml-dataset.sh`
-  once to build the full history.
-* A failure in this stage is logged ("ML dataset stage failed") and does **not** fail the cleaning cycle.
+```text
+/data/enriched/schedule_stops/service_date=YYYY-MM-DD/     Snappy Parquet
+```
+
+One row per (service date, trip, stop):
+
+| Column | Meaning |
+|---|---|
+| `feed_version` | GTFS feed the row comes from (`<archive date>-<sha12>`) |
+| `trip_id`, `route_id`, `route_short_name`, `route_type`, `direction_id`, `trip_headsign` | trip and route description (`route_type` 0 = tram, 3 = bus) |
+| `stop_sequence`, `stop_id`, `stop_lat`, `stop_lon` | the stop and its position in the trip |
+| `cell_x`, `cell_y` | grid cell of the stop (same grid as `delay_estimation`: `grid_x`, `grid_y`) |
+| `sched_seconds` | scheduled departure in seconds since the service-day start (may exceed 86 400, e.g. `25:10:00` = 90 600) |
+| `sched_epoch` | scheduled departure as UTC epoch seconds: `service_day_start + sched_seconds` |
+| `trip_last_sequence` | the highest `stop_sequence` of the trip (for `trip_progress`) |
+| `service_date` | partition column (date of the service day, Warsaw) |
+
+The delay is defined exactly as in the batch job: `delay_s = ping_epoch − sched_epoch`, positive = late.
+
+Sources: `/data/enriched/gtfs_trip_services` (which trip runs on which date, with route description) and the
+cleaned `gtfs_stop_times` and `gtfs_stops` of the same feed version. The feed for a service date is chosen by
+`pick_feed_versions`, the same rule as in the ML build.
 
 ## Definition of delay (single source of truth: `spark/ml/delay_estimation.py`)
 
@@ -121,6 +125,9 @@ The GTFS feed for a service date is chosen by `pick_feed_versions`: among feeds 
 | `target_delay_s`, `target_horizon_s`, `has_target` | see above |
 | `date` | partition column (UTC event date) |
 
+The weather and air-quality station is found through a coarse lookup grid (`lk_y`, `lk_x`, cells of 0.005°):
+every cell has a precomputed nearest station, and the observation is the one of the ping's minute.
+
 ## Columns of `stop_visits`
 
 `trip_id, service_date, side_number, stop_sequence, stop_id, route_id, route_short_name, route_type,
@@ -131,16 +138,21 @@ the change of delay since the vehicle's previous visit.
 
 ## Inspecting the data
 
-* `bash scripts/show-sample.sh stop_visits 5` / `ml_dataset 5` prints the schema, the row count and a few rows.
+* `bash scripts/show-sample.sh stop_visits 5` / `ml_dataset 5` / `schedule_stops 5` prints the schema, the row count and a few rows.
 * HDFS browser: <http://localhost:9870> → Utilities → Browse the file system → `/data/enriched`.
 * Command line: `docker compose exec -T namenode hdfs dfs -ls -R /data/enriched`.
+* Sizes: `docker compose exec -T namenode hdfs dfs -du -s -h /data/enriched/*`.
+* Last ML build: `docker compose exec -T namenode hdfs dfs -cat /data/enriched/_ml_reports/last_stage_run.json`.
+* Scheduler log lines of this stage: `docker compose logs --since 1h batch-scheduler | grep "Stage 3"`.
 * Parquet files are binary; use Spark (the scripts above) to read them.
 
 ## Tests
 
-Run on a laptop with Java 17 or 21: `pip install pyspark==3.5.7 pytest && python -m pytest tests -q`.
-The tests build a tiny synthetic city (one trip, 12 stops, a bus with a *known* delay of `60 + 10·k` s at
-stop k, plus junk pings, one weather and one air station) and check that the pipeline recovers it.
+Run on a laptop with Java 17 or 21, Python 3.11 / 3.12: `pip install pyspark==3.5.7 pytest && python -m pytest tests -q`
+(29 tests). The tests build a tiny synthetic city (one trip, 12 stops, a bus with a *known* delay of
+`60 + 10·k` s at stop k, plus junk pings, one weather and one air station) and check that the pipeline
+recovers it. The `schedule_stops` tests use their own small lake with two trips, one of them scheduled
+at `25:00:00`.
 
 | # | Goal | Steps | Expected |
 |---|---|---|---|
@@ -153,16 +165,23 @@ stop k, plus junk pings, one weather and one air station) and check that the pip
 | 7 | Weather/air attached | compare with planted values | 5 °C, 3 m/s, PM10 = 25; PM2.5/NO2 NULL (not 0) |
 | 8 | Calendar features in local time | first row | hour 8–9, Monday, not weekend |
 | 9 | Re-run is idempotent | build twice | identical row counts |
-| 10 | Feed choice | `pick_feed_versions` with 2 feeds | newest feed ≤ date; uncovered date omitted; `forced` wins |
-| 11 | Haversine | 0.01° of latitude | 1111.95 m ± 1 m |
-| 12 | trip_id check | matching / prefixed ids | verdict PARTIAL / FAIL |
-| 13 | Profiler summaries | GPS bbox check, GTFS stop-time summary | 1 ping outside the box; 12 stop times, 0 NULL departures |
-| 14 | Cleaning: bad rows | duplicate, lat=200, empty trip_id | exactly 1 row; bearing −90 → 270 |
-| 15 | GTFS times after midnight | `25:10:00`, `08:00:00`, `bad` | 90600, 28800, NULL |
-| 16 | Naive Warsaw time → UTC | winter / summer timestamp | −1 h / −2 h |
-| 17 | Early bus waiting at a stop | arrives 5 min early, waits, leaves on time | delay 0 (departure), not −300 |
-| 18 | Passing bus | pings 20 m before / 63 m after the stop | closest ping chosen |
-| 19 | Dwell tolerance 0 | identical pings, tolerance 0 | latest ping still wins |
-| 20 | Automatic stage keeps other days | pipeline-like session without dynamic overwrite, extra day present | only the target day is replaced; the other day survives |
-| 21 | Automatic stage is throttled | run it twice in a row | second run is skipped; caller's session settings unchanged |
-| 22 | Automatic stage without data | empty lake | returns "no-data", does not raise |
+| 10 | Build report numbers | statistics returned by the build | unmatched trip counted (matched pings < all pings); 12 stop visits |
+| 11 | Feed choice | `pick_feed_versions` with 2 feeds | newest feed ≤ date; uncovered date omitted; `forced` wins |
+| 12 | Haversine | 0.01° of latitude | 1111.95 m ± 1 m |
+| 13 | Air column names | `PM2.5`, `NO2` | `air_pm2_5`, `air_no2` |
+| 14 | trip_id check, partial match | GPS has one matching and one unknown trip_id | 1 of 2 matched, unknown id listed, verdict PARTIAL |
+| 15 | trip_id check, wrong format | GPS ids prefixed with `1_` | verdict FAIL |
+| 16 | Profiler summaries | GPS bbox check, GTFS stop-time summary | 1 ping outside the box; 12 stop times, 0 NULL departures |
+| 17 | Cleaning: bad rows | duplicate, lat=200, empty trip_id | exactly 1 row; bearing −90 → 270 |
+| 18 | GTFS times after midnight | `25:10:00`, `08:00:00`, `bad` | 90600, 28800, NULL |
+| 19 | Naive Warsaw time → UTC | winter / summer timestamp | −1 h / −2 h |
+| 20 | Early bus waiting at a stop | arrives 5 min early, waits, leaves on time | delay 0 (departure), not −300 |
+| 21 | Passing bus | pings 20 m before / 63 m after the stop | closest ping chosen |
+| 22 | Dwell tolerance 0 | identical pings, tolerance 0 | latest ping still wins |
+| 23 | `schedule_stops`: dates to keep | `schedule_dates` for 2026-11-16 | 15th, 16th, 17th; with 0/0 only the 16th |
+| 24 | `schedule_stops`: content | build one date | 5 rows; stop 0 of the 08:00 trip at 07:00 UTC; `25:00:00` = 00:00 UTC next day; `trip_last_sequence`, route fields and headsign present |
+| 25 | `schedule_stops`: unchanged feed | build twice, then with `force` | second run `unchanged`, forced run `built` |
+| 26 | `schedule_stops`: other dates untouched | build with a date no feed covers | that date is `no-feed`; the existing partition keeps its 5 rows |
+| 27 | `schedule_stops`: new feed | a newer feed covers the same date | partition replaced by the new feed's rows |
+| 28 | `schedule_stops`: no `gtfs_trip_services` | empty lake | status `no-trip-services`, no error |
+| 29 | `schedule_stops`: safety guard | session with static overwrite mode | refuses to run (`RuntimeError`) |

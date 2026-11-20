@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Show a few rows of /data/enriched/{stop_visits,ml_dataset} in readable form.
+# Show a few rows of /data/enriched/{stop_visits,ml_dataset,schedule_stops} in readable form.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 docker compose -f docker-compose.yml --profile analytics run --rm --no-deps \

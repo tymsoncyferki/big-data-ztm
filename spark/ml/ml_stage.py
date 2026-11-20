@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 from build_ml_dataset import BuildConfig, build
 from ml_common import HDFS, _fs, configure_session, write_text
+from schedule_stops import refresh_schedule_stops
 
 LOG = logging.getLogger("ztm-ml")
 MARKER = "/data/enriched/_ml_reports/last_stage_run.json"
@@ -31,11 +32,24 @@ def _minutes_since_last_run(spark, base: str) -> float | None:
     return (time.time() * 1000 - fs.getFileStatus(path).getModificationTime()) / 60000.0
 
 
+def _refresh_schedule(spark, base: str, today: str | None) -> None:
+    """Daily timetable lookup for streaming. Independent of the ML throttle; never raises."""
+    try:
+        session = configure_session(spark.newSession())
+        result = refresh_schedule_stops(session, base, today)
+        LOG.info("Stage 3: schedule_stops %s", {d: r["status"] for d, r in result.items()})
+    except Exception:
+        LOG.exception("Stage 3: schedule_stops failed; the ML dataset is not affected")
+
+
 def run_ml_stage(spark, base: str = HDFS, today: str | None = None) -> str:
     """Returns 'built', 'skipped' or 'no-data'. Raises on genuine errors."""
     base = base.rstrip("/")
     days = max(1, int(os.getenv("ML_STAGE_DAYS", "2")))
     min_interval = float(os.getenv("ML_STAGE_MIN_INTERVAL_MIN", "720"))
+
+    # Cheap when nothing changed (one partition check per date), so no throttle needed.
+    _refresh_schedule(spark, base, today)
 
     age = _minutes_since_last_run(spark, base)
     if age is not None and age < min_interval:
