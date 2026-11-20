@@ -19,7 +19,7 @@ import argparse
 import json
 import logging
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 from pyspark import StorageLevel
 from pyspark.sql import DataFrame, SparkSession, functions as F, types as T
@@ -332,10 +332,25 @@ def main() -> None:
     with BatchLock(timeout_s=args.lock_timeout_min * 60, enabled=not args.no_lock):
         spark = build_spark("big-data-ztm-ml-dataset", cfg.base)
         try:
-            stats = build(spark, cfg)
+            available = list_partition_values(spark, f"{cfg.base}/data/cleaned/gps_observations", "date")
+            start = cfg.start_date or (available[0] if available else "")
+            end = cfg.end_date or (available[-1] if available else "")
+            days = [d for d in available if start <= d <= end]
+            if not days:
+                raise SystemExit(f"No cleaned GPS partitions between {start} and {end}. Available: {available}")
+            # One day at a time, so the job fits in the container memory limit
+            all_stats = {}
+            for day in days:
+                LOG.info("Building day %s (%d/%d)", day, days.index(day) + 1, len(days))
+                try:
+                    all_stats[day] = build(spark, replace(cfg, start_date=day, end_date=day))
+                except SystemExit as exc:
+                    # e.g. no GTFS feed for that day; skip it, the other days are still useful
+                    LOG.warning("Day %s not built: %s", day, exc)
+                    all_stats[day] = {"error": str(exc)}
         finally:
             spark.stop()
-    print(json.dumps(stats, indent=2, default=str))
+    print(json.dumps(all_stats, indent=2, default=str))
 
 
 if __name__ == "__main__":

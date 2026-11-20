@@ -39,6 +39,7 @@ Options of the build (all optional): `--stop-radius-m 75`, `--max-abs-delay-s 72
 `--dwell-tolerance-m 10`, `--ping-interval-s 60`, `--horizon-min 10`, `--horizon-tolerance-s 300`,
 `--confirm-lag-s 30`, `--air-params PM10,PM2.5,NO2`, `--feed-version <v>` (force one GTFS feed), `--no-lock`.
 
+The build goes one day at a time (one Spark job per `date=`), so a long history does not run out of memory.
 Re-running a date range replaces exactly those `date=` partitions (idempotent). All scripts take the
 same lock as the 15-minute cleaning scheduler, so they never read partitions while cleaning rewrites
 them: if cleaning is running, the job waits (up to 45 min); if the job is running, the scheduler skips
