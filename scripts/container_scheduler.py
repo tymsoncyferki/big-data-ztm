@@ -36,9 +36,7 @@ def run_once(dataset: str, archive: str | None = None, force: bool = False) -> b
             log('Previous batch iteration still running; skipping overlap.')
             return False
         command = [SPARK_SUBMIT, '--master', 'local[2]', '--driver-memory', '2g', PIPELINE,
-                   '--dataset', dataset,
-                   # ML dataset is built by hand for now (scripts/build-ml-dataset.sh)
-                   '--skip-ml']
+                   '--dataset', dataset]
         if archive:
             command.extend(['--archive', archive])
         if force:
