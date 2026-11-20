@@ -22,7 +22,7 @@ Apache Spark processes stored data in three batch stages:
 
 All three stages run in every full batch cycle, and the optional Docker
 scheduler runs subsequent cycles every 15 minutes. Stage 3 rebuilds only the
-last 2 UTC days and at most once an hour (`ML_STAGE_DAYS`,
+last 2 UTC days, one day at a time, at most every 12 hours (`ML_STAGE_DAYS`,
 `ML_STAGE_MIN_INTERVAL_MIN`); a failure there is logged and never fails the
 cleaning stages. Use `bash scripts/build-ml-dataset.sh` for a full or
 historical rebuild. Historical statistics, model training, Spark Structured

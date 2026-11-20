@@ -51,15 +51,17 @@ that cycle and catches up on the next one.
 enrichment), inside the same Spark application and the same batch lock. So `bootstrap.sh`,
 `run-scheduled.sh` and the Docker scheduler refresh the ML tables without any extra step.
 
-* Only the last `ML_STAGE_DAYS` (default 2) UTC days are rebuilt, and at most every
-  `ML_STAGE_MIN_INTERVAL_MIN` (default 60) minutes (a marker file
+* Only the last `ML_STAGE_DAYS` (default 2) UTC days are rebuilt, one day at a time, and at most every
+  `ML_STAGE_MIN_INTERVAL_MIN` (default 720, i.e. 12 h) minutes (a marker file
   `/data/enriched/_ml_reports/last_stage_run.json` records the last success); older partitions are left alone.
   To change the defaults, pass the variables to the container, e.g. add
-  `ML_STAGE_MIN_INTERVAL_MIN: "${ML_STAGE_MIN_INTERVAL_MIN:-60}"` to the `batch_environment` block of
+  `ML_STAGE_MIN_INTERVAL_MIN: "${ML_STAGE_MIN_INTERVAL_MIN:-720}"` to the `batch_environment` block of
   `docker-compose.yml` and set the value in `.env`.
-* Because of the throttle, the ML tables change about once an hour even though cleaning runs every
+* Because of the throttle, the ML tables change about twice a day even though cleaning runs every
   15 minutes. The newest rows have no target yet (it needs a stop visit 10+ minutes later) and get it
-  on the next rebuild.
+  on the next rebuild. With 2 days and 12 hours, every UTC day is rebuilt at least once after it has
+  ended, so it ends up complete. If a run fails, no marker is written and the next 15-minute cycle
+  tries again.
 * The first run after installation only covers the last 2 days: run `bash scripts/build-ml-dataset.sh`
   once to build the full history.
 * A failure in this stage is logged ("ML dataset stage failed") and does **not** fail the cleaning cycle.

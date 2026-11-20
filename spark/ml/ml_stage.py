@@ -4,7 +4,8 @@ Called from spark/batch/run_pipeline.py after cleaning and GTFS enrichment, insi
 SAME Spark application and the SAME batch lock (so it must not take the lock itself).
 
 Cost control: only the last `ML_STAGE_DAYS` UTC days are rebuilt (older partitions are
-left untouched), and not more often than every `ML_STAGE_MIN_INTERVAL_MIN` minutes.
+left untouched), one day at a time, and not more often than every
+`ML_STAGE_MIN_INTERVAL_MIN` minutes (default 12 h).
 A full or historical rebuild is done by hand: bash scripts/build-ml-dataset.sh
 """
 
@@ -34,7 +35,7 @@ def run_ml_stage(spark, base: str = HDFS, today: str | None = None) -> str:
     """Returns 'built', 'skipped' or 'no-data'. Raises on genuine errors."""
     base = base.rstrip("/")
     days = max(1, int(os.getenv("ML_STAGE_DAYS", "2")))
-    min_interval = float(os.getenv("ML_STAGE_MIN_INTERVAL_MIN", "60"))
+    min_interval = float(os.getenv("ML_STAGE_MIN_INTERVAL_MIN", "720"))
 
     age = _minutes_since_last_run(spark, base)
     if age is not None and age < min_interval:
@@ -43,17 +44,23 @@ def run_ml_stage(spark, base: str = HDFS, today: str | None = None) -> str:
 
     end = datetime.strptime(today, "%Y-%m-%d").date() if today else datetime.now(timezone.utc).date()
     start = end - timedelta(days=days - 1)
-    cfg = BuildConfig(base=base, start_date=start.isoformat(), end_date=end.isoformat())
-
-    LOG.info("Stage 3: building ML dataset for %s..%s", cfg.start_date, cfg.end_date)
+    LOG.info("Stage 3: building ML dataset for %s..%s", start, end)
     # A separate session: same cluster/application, but its own SQL settings.
     ml = configure_session(spark.newSession())
-    try:
-        stats = build(ml, cfg)
-    except SystemExit as exc:      # build() uses SystemExit for "nothing to do yet"
-        LOG.warning("Stage 3: ML dataset not built: %s", exc)
+    built = {}
+    day = start
+    # One day at a time, so the job fits in the container memory limit
+    while day <= end:
+        cfg = BuildConfig(base=base, start_date=day.isoformat(), end_date=day.isoformat())
+        try:
+            stats = build(ml, cfg)
+            built[day.isoformat()] = stats.get("ml_dataset", {}).get("rows")
+        except SystemExit as exc:  # build() uses SystemExit for "nothing to do yet"
+            LOG.warning("Stage 3: ML dataset not built for %s: %s", day, exc)
+        day += timedelta(days=1)
+
+    if not built:
         return "no-data"
-    write_text(ml, f"{base}{MARKER}", json.dumps({"finished": time.time(), "dates": [cfg.start_date, cfg.end_date],
-                                                  "rows": stats.get("ml_dataset", {}).get("rows")}))
-    LOG.info("Stage 3: ML dataset done in %ss", stats.get("seconds"))
+    write_text(ml, f"{base}{MARKER}", json.dumps({"finished": time.time(), "rows": built}))
+    LOG.info("Stage 3: ML dataset done for %s", sorted(built))
     return "built"
