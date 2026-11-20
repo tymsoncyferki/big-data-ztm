@@ -28,6 +28,16 @@ cleaning stages. Use `bash scripts/build-ml-dataset.sh` for a full or
 historical rebuild. Historical statistics, model training, Spark Structured
 Streaming and Cassandra are planned, not implemented.
 
+Stage 3 also prepares the timetable lookup for the future streaming job:
+`/data/enriched/schedule_stops/` holds one row per scheduled stop of every trip
+(stop position, scheduled time as UTC epoch seconds, route and headsign), built
+from `gtfs_trip_services` and the cleaned `gtfs_stop_times` and `gtfs_stops` of
+the same feed. It covers yesterday, today and tomorrow in Warsaw time, because
+GTFS times can pass midnight. It is checked in every 15-minute cycle, independently
+of the 12-hour ML throttle, and a date is rebuilt only when it has no partition
+yet or a new GTFS feed version now covers it. The columns and the details are
+described in [docs/ml-dataset.md](docs/ml-dataset.md).
+
 ## Architecture
 
 ```text
@@ -185,7 +195,7 @@ bash scripts/profile-data.sh                 # read-only data check, incl. GPS v
 bash scripts/build-ml-dataset.sh             # build stop_visits and ml_dataset for all available days
 bash scripts/build-ml-dataset.sh --start-date 2026-11-16 --end-date 2026-11-17
 bash scripts/diagnose-delays.sh              # quality of the estimated delays and baselines
-bash scripts/show-sample.sh ml_dataset 5     # print a few rows (also: stop_visits)
+bash scripts/show-sample.sh ml_dataset 5     # print a few rows (also: stop_visits, schedule_stops)
 ```
 
 The build also runs automatically as the last stage of every full batch cycle
@@ -202,7 +212,7 @@ leakage rules and every column are described in
 ### Tests
 
 ```bash
-pip install pyspark==3.5.7 pytest      # needs Java 17 or 21 on the host
+pip install pyspark==3.5.7 pytest      # needs Python 3.11/3.12, Java 17 or 21 on the host
 python -m pytest tests -q
 ```
 
@@ -264,6 +274,7 @@ does not automatically replace a flow already imported into NiFi.
 /data/enriched/gtfs_trip_services/feed_version=<version>/
 /data/enriched/stop_visits/date=YYYY-MM-DD/   Delay at each stop visit (estimated from GPS)
 /data/enriched/ml_dataset/date=YYYY-MM-DD/    Features + 10-minute-ahead target per vehicle-minute
+/data/enriched/schedule_stops/service_date=YYYY-MM-DD/   Timetable lookup (stop, scheduled time) for streaming
 /data/enriched/_ml_reports/                   JSON reports: counts and baselines per build
 /data/cleaned/_pipeline_state/          Batch state and processing markers
 ```
