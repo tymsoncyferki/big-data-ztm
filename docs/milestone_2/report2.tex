@@ -550,6 +550,43 @@ source rather than a stream.
     \label{fig:conceptual-model}
 \end{figure}
 
+\subsection{Machine-learning data set (\texttt{ml\_dataset})}
+
+The ML data set is a Snappy Parquet table partitioned by the UTC event date. It has 44 columns and one row per vehicle, trip and minute; a row is identified by \texttt{event\_\allowbreak{}time\_\allowbreak{}utc}, \texttt{trip\_\allowbreak{}id} and \texttt{side\_\allowbreak{}number}. Each row describes one vehicle only: its position, its own delay history, the weather and air quality of the nearest stations in the same minute, and the delay it will have about 10 minutes later. Table~\ref{tab:ml} groups the columns by role.
+
+\begin{longtable}{p{2.6cm}p{4.2cm}p{6.7cm}}
+\caption{Columns of the ML data set by role.}\label{tab:ml}\\
+\toprule \textbf{Role} & \textbf{Columns} & \textbf{Description / transformation}\\ \midrule\endfirsthead
+\toprule \textbf{Role} & \textbf{Columns} & \textbf{Description / transformation}\\ \midrule\endhead
+\bottomrule\endfoot
+Row key and partitioning (5, not features) & \texttt{event\_\allowbreak{}time\_\allowbreak{}utc, trip\_\allowbreak{}id, side\_\allowbreak{}number, service\_\allowbreak{}date, date} & Key of the row (minute, trip, vehicle), GTFS service date, and UTC partition derived from the event time. Used for joins and for the time-based split only.\\
+\midrule
+\textbf{Independent features (30)} & & \\
+Line (3) & \texttt{route\_\allowbreak{}short\_\allowbreak{}name, route\_\allowbreak{}type, direction\_\allowbreak{}id} & From GTFS via \texttt{trip\_\allowbreak{}id}. \texttt{route\_\allowbreak{}type}: 0 = tram, 3 = bus. \texttt{route\_\allowbreak{}short\_\allowbreak{}name} is categorical and is encoded for training.\\
+Position (2) & \texttt{lat, lon} & GPS position (WGS84).\\
+Time (4) & \texttt{hour\_\allowbreak{}local, day\_\allowbreak{}of\_\allowbreak{}week, is\_\allowbreak{}weekend, is\_\allowbreak{}rush\_\allowbreak{}hour} & Derived in Warsaw local time; rush hour = weekdays 7--9 and 15--18.\\
+Movement (2) & \texttt{speed\_\allowbreak{}kmh, speed\_\allowbreak{}avg\_\allowbreak{}5min\_\allowbreak{}kmh} & Distance between consecutive pings divided by time and its 5-minute average; NULL if the gap exceeds 180~s or the speed exceeds 120~km/h.\\
+Delay history (3) & \texttt{last\_\allowbreak{}delay\_\allowbreak{}s, last\_\allowbreak{}delay\_\allowbreak{}age\_\allowbreak{}s, delay\_\allowbreak{}change\_\allowbreak{}s} & Delay at the last stop visit of the same vehicle confirmed at least 30~s before the row, the age of that visit in seconds, and the change of delay against the previous stop. NULL before the first confirmed visit.\\
+Trip progress (3) & \texttt{last\_\allowbreak{}stop\_\allowbreak{}sequence, trip\_\allowbreak{}last\_\allowbreak{}sequence, trip\_\allowbreak{}progress} & Position along the trip; \texttt{trip\_\allowbreak{}progress} is between 0 and 1.\\
+Weather (9) & \texttt{temp\_\allowbreak{}air, temp\_\allowbreak{}road, humidity, wind\_\allowbreak{}speed, wind\_\allowbreak{}dir\_\allowbreak{}sin, wind\_\allowbreak{}dir\_\allowbreak{}cos, precip\_\allowbreak{}intensity, is\_\allowbreak{}raining, weather\_\allowbreak{}missing} & Nearest weather station and the same minute, found with a precomputed grid lookup; out-of-range values become NULL; wind direction is encoded as sine and cosine; \texttt{is\_\allowbreak{}raining} is true when the precipitation intensity is above zero.\\
+Air quality (4) & \texttt{air\_\allowbreak{}pm10, air\_\allowbreak{}pm2\_\allowbreak{}5, air\_\allowbreak{}no2, air\_\allowbreak{}missing} & Nearest station that measures the pollutant, same minute; NULL (never 0) when unavailable.\\
+\midrule
+Not used as features (6) & \texttt{route\_\allowbreak{}id, wind\_\allowbreak{}dir, weather\_\allowbreak{}station\_\allowbreak{}dist\_\allowbreak{}m, air\_\allowbreak{}pm10\_\allowbreak{}dist\_\allowbreak{}m, air\_\allowbreak{}pm2\_\allowbreak{}5\_\allowbreak{}dist\_\allowbreak{}m, air\_\allowbreak{}no2\_\allowbreak{}dist\_\allowbreak{}m} & Replaced by the sine/cosine encoding, or only describing the distance to the station used (data-quality information).\\
+\midrule
+\textbf{Dependent variable (1)} & \texttt{target\_\allowbreak{}delay\_\allowbreak{}s} & Delay in seconds at the first stop visit at least 10 minutes after the row.\\
+Target handling (2) & \texttt{target\_\allowbreak{}horizon\_\allowbreak{}s, has\_\allowbreak{}target} & Real time gap to the target visit (600--900~s) and a flag for rows that have a target. \texttt{target\_\allowbreak{}horizon\_\allowbreak{}s} is not a feature because it is unknown at prediction time.\\
+\end{longtable}
+
+\paragraph{Transformations from the cleaned data.}
+\begin{enumerate}
+  \item Stop visits and delays are estimated from GPS pings and the timetable of the matching GTFS feed version (delay $=$ time of the vehicle at the stop $-$ scheduled departure; positive means late).
+  \item Each ping is assigned a spatial cell and a minute; the nearest weather and air-quality station of each cell is precomputed, and the observation of that station for the same minute is attached.
+  \item Time, speed and trip-progress features are derived, and delay-history features are taken from the vehicle's own earlier visits.
+  \item The target is attached by a look-ahead on the later visits of the same trip: the first visit at least 600~s ahead, accepted if it occurs within 900~s.
+\end{enumerate}
+
+\paragraph{Target availability and missing values.} Rows from the most recent minutes cannot have a target yet, because the visit 10 minutes ahead has not happened; they are stored with \texttt{has\_\allowbreak{}target} equal to false. The data set is rebuilt periodically (at most every 12 hours, for the last two UTC days), and a rebuild fills the targets that have become available. Rows without a stop visit 10--15 minutes ahead (end of a trip, missing pings) keep \texttt{has\_\allowbreak{}target} equal to false and are excluded from training. Movement, weather and air-quality values may be NULL by design and are imputed or handled by the model, with the \texttt{*\_\allowbreak{}missing} flags kept as features.
+
 \section{Data Processing Steps}
 
 The proposed solution is based on the Lambda Architecture, which combines the processing of current observations with the analysis of historical data. These paths support real-time delay predictions and historical statistics. Their results are brought together in a serving layer and displayed through a dashboard. Figure~\ref{fig:lambda-data-flow} presents the overall data flow.
@@ -611,6 +648,62 @@ A separate \textbf{Python simulation module} will buffer GPS observations for 15
 \subsection{Serving Layer and Dashboard}
 
 \textbf{Apache Cassandra} will store current information from the speed layer and selected historical aggregates and model evaluation metrics from the batch layer. \textbf{Streamlit} will provide a dashboard that reads these results from Cassandra and presents them through interactive visualisations.
+
+\section{Analytical Approach}
+\label{sec:analytics}
+\setlength{\emergencystretch}{3em}
+
+\subsection{Tasks}
+
+\begin{longtable}{p{2.9cm}p{2.2cm}p{2.4cm}p{2.8cm}p{2.4cm}}
+\caption{Analytical tasks, their processing mode and status.}\label{tab:tasks}\\
+\toprule \textbf{Task} & \textbf{Type} & \textbf{Layer} & \textbf{Data} & \textbf{Status}\\ \midrule\endfirsthead
+\toprule \textbf{Task} & \textbf{Type} & \textbf{Layer} & \textbf{Data} & \textbf{Status}\\ \midrule\endhead
+\bottomrule\endfoot
+Delay estimation per vehicle, stop and line & Descriptive (measurement) & Batch for history, stream for current values & \texttt{stop\_\allowbreak{}visits}, \texttt{schedule\_\allowbreak{}stops} & batch \textsc{implemented}; stream \textsc{planned}\\
+Delay prediction about 10 minutes ahead & Supervised regression & Batch training, stream scoring & \texttt{ml\_\allowbreak{}dataset} & dataset and baselines \textsc{implemented}; model \textsc{planned}\\
+Alerts for lines and areas with a high predicted delay & Threshold rule on predictions & Stream & model output & \textsc{planned}\\
+Historical delay statistics by line, stop, hour, weekday and weather & Descriptive aggregation & Batch & \texttt{stop\_\allowbreak{}visits}, \texttt{ml\_\allowbreak{}dataset} & \textsc{planned}\\
+Weather impact: dry versus rainy comparison and ranking of the most weather-sensitive lines and stops & Grouped comparison / correlation & Batch & \texttt{ml\_\allowbreak{}dataset} & \textsc{planned}\\
+Reference models (no change, predict zero) & Baselines & Batch & \texttt{ml\_\allowbreak{}dataset} & \textsc{implemented}\\
+\end{longtable}
+
+\subsection{Delay prediction}
+
+\paragraph{Task.} Regression of \texttt{target\_\allowbreak{}delay\_\allowbreak{}s}: the delay of a vehicle at the first stop visit 10--15 minutes after the current time, predicted from the 30 independent features of Table~\ref{tab:ml}. A fixed horizon gives every row the same question and makes the result comparable with the baselines. Only rows with \texttt{has\_\allowbreak{}target} equal to true are used. Features that are not available online, such as \texttt{target\_\allowbreak{}horizon\_\allowbreak{}s}, are excluded, so that the trained model can later be scored in the speed layer.
+
+\paragraph{Models.} Spark MLlib linear regression as a reference, and gradient-boosted trees as the main candidates. The best model will be stored in HDFS for the speed layer.
+
+\paragraph{Evaluation.} MAE and RMSE on a time-based split: the earlier days will be used for training and the latest days for testing, so that no information from the future reaches the training set. Two baselines define the error that the model has to beat: \emph{no change} (the prediction equals \texttt{last\_\allowbreak{}delay\_\allowbreak{}s}) and \emph{predict zero} (the vehicle is on time). Their MAE is already computed for every build of the data set. The evaluation metrics of the final model will be exported to the serving layer.
+
+\subsection{Historical statistics and weather impact}
+
+Batch jobs will aggregate the measured delays by line, stop, hour of day, day of the week and weather condition. They will also compare delays on dry and rainy days (and under other weather conditions such as wind and low temperature) and rank the lines and stops whose delays increase most in bad weather.
+
+\subsection{Batch and stream}
+
+\begin{longtable}{p{3.8cm}p{2.6cm}p{6.8cm}}
+\caption{Processing mode of each analytical result.}\label{tab:mode}\\
+\toprule \textbf{Result} & \textbf{Mode} & \textbf{Reason}\\ \midrule\endfirsthead
+\toprule \textbf{Result} & \textbf{Mode} & \textbf{Reason}\\ \midrule\endhead
+\bottomrule\endfoot
+Model training and evaluation & Batch & Needs the full history; hours of latency are acceptable.\\
+Historical statistics, weather-sensitivity ranking & Batch & Aggregation over all collected days.\\
+Current delay of each vehicle & Stream & Will be computed from live pings and the timetable lookup (\texttt{schedule\_\allowbreak{}stops}) with the same delay definition as in the batch job.\\
+Delay prediction and alerts & Stream & Features will be prepared from the live data and scored with the model exported from the batch layer; results will be available within seconds after the buffered events arrive.\\
+\end{longtable}
+All sources are delivered with a fixed delay of 15 minutes by the source simulator, so the stream will describe the situation 15 minutes before the dashboard shows it.
+
+\subsection{Presentation of results to end users}
+
+The results will be shown in a Streamlit dashboard for passengers, operators and transport analysts. Real-time panels read from Cassandra, historical panels read the batch aggregates exported to Cassandra.
+\begin{itemize}
+  \item \textbf{Live monitoring:} a map of the network with vehicles coloured by current delay, filtering by line and stop, and the current weather and air quality from the nearest stations.
+  \item \textbf{Predictions and alerts:} the predicted delay of a vehicle on the selected line, and a list of lines and areas where the predicted delay exceeds a threshold chosen by the user, so that problems can be noticed in advance.
+  \item \textbf{Historical statistics:} average delays by line, stop, hour of day, day of the week and weather condition, including the comparison of dry and rainy days.
+  \item \textbf{Weather sensitivity:} a ranking of the lines and stops most sensitive to bad weather.
+  \item \textbf{Model quality:} the evaluation metrics of the model next to the baselines.
+\end{itemize}
 
 \section{Use of Artificial Intelligence}
 
