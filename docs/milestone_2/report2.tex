@@ -67,7 +67,7 @@ The main business and technical assumptions presented in PM1 remain unchanged. H
 \subsection{Data Sources}
 \label{sec:updates-data-sources}
 
-GPS and GTFS data sources were changed from the Warsaw Open Data API to MKURAN. Unlike the original API, MKURAN provides \texttt{trip\_id} and \texttt{service\_date} alongside GPS observations, as well as ready-to-use GTFS files. This simplifies matching vehicle positions to scheduled trips and calculating delays, as identifying the correct trip for each vehicle independently would require a complex matching process based on location, time, and timetable data.
+GPS and GTFS data sources were changed from the Warsaw Open Data API to mkuran.pl. Weather and air quality data are still taken from the Warsaw Open Data API. Unlike the original API, mkuran.pl provides \texttt{trip\_id} and \texttt{service\_date} alongside GPS observations, as well as ready-to-use GTFS files. This simplifies matching vehicle positions to scheduled trips and calculating delays, as identifying the correct trip for each vehicle independently would require a complex matching process based on location, time, and timetable data.
 
 \subsection{Removal of Hive Metastore}
 
@@ -328,30 +328,6 @@ Because of hardware problems and restarts of our infrastructure, data is
 available for about 152 of the 165 hours of this period. For this reason
 daily averages were computed only on days with complete data
 (18, 19 and 20 November).
-% We analyze two variants of data: raw records (as received) and cleaned records (after validation and deduplication).
-
-
-% \begin{table}[H]
-% \centering
-% \small
-% \caption{Summary of the collected data sets (15-22 November 2026).}
-% \label{tab:datasets-summary}
-% \begin{tabular}{|>{\raggedright\arraybackslash}p{2.6cm}|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}p{2.5cm}|}
-% \hline
-% & \textbf{GPS} & \textbf{Weather} & \textbf{Air quality} & \textbf{GTFS} \\ \hline
-% Category & positions of buses and trams & meteorological measurements & air pollution and sensor measurements & static timetable \\ \hline
-% Source format & JSON & JSON & JSON (nested) & ZIP of CSV files \\ \hline
-% Snapshots & every 10\,s (8\,619/day) & every 30\,s (2\,880/day) & every 30\,s (2\,880/day) & once a day \\ \hline
-% Records per snapshot & 812 (100--1\,082) & 16 & 773 & 7.8\,M stop times \\ \hline
-% Cleaned rows per day & $\approx$5.15\,M & 46\,080 & $\approx$2.22\,M & -- \\ \hline
-% Raw volume per day & $\approx$2.46\,GB & $\approx$10\,MB & $\approx$400\,MB & $\approx$105\,MB \\ \hline
-% Total raw / cleaned & 13.6\,GB / 0.76\,GB & 63\,MB / 5.5\,MB & 2.48\,GB / 92\,MB & 735\,MB (7 ZIPs) \\ \hline
-% Cleaned rows in total & 29.2\,M & 284\,624 & 13.7\,M & -- \\ \hline
-% \end{tabular}
-% \end{table}
-
-% Within the 165 hours of the collection period data is available in around 152/153 hours.
-% The missing hours were caused by restarts of our own infrastructure and not by the data providers.
 
 \subsection{Vehicle positions (GPS)}
 
@@ -558,7 +534,7 @@ The proposed solution is based on the Lambda Architecture, which combines the pr
 
 \subsection{Data Ingestion}
 
-The system will collect three types of stream data: vehicle GPS positions, weather measurements, and air quality measurements. Public transport timetables will form a separate batch source, refreshed approximately once per day. A separate Python module will buffer GPS observations for 10 minutes and interpolate weather and air quality measurements within the corresponding windows. It will send synchronised streams to the ingestion component, while timetable data will be retrieved separately. The ingestion component will validate incoming data and store raw records in HDFS. GPS and environmental observations will also be forwarded to Kafka for stream processing.
+The system will collect three types of stream data: vehicle GPS positions, weather measurements, and air quality measurements. Public transport timetables will form a separate batch source, refreshed approximately once per day. A separate Python module will buffer GPS observations for 15 minutes and interpolate weather and air quality measurements within the corresponding windows. It will send synchronised streams to the ingestion component, while timetable data will be retrieved separately. The ingestion component will validate incoming data and store raw records in HDFS. GPS and environmental observations will also be forwarded to Kafka for stream processing.
 
 \subsection{Batch Processing}
 
@@ -591,7 +567,7 @@ The system will use open-source Big Data technologies organised into ingestion, 
 
 \subsection{Ingestion Layer}
 
-A separate \textbf{Python simulation module} will buffer GPS observations for 10 minutes and interpolate weather and air quality measurements to create synchronised streams. The module will run before NiFi and outside the main application. \textbf{Apache NiFi} will receive the simulated streams and retrieve daily timetables. It will save raw observations and timetables in HDFS and forward GPS, weather, and air quality events to \textbf{Apache Kafka}. Kafka will organise the incoming records into separate topics for the stream processing application.
+A separate \textbf{Python simulation module} will buffer GPS observations for 15 minutes and interpolate weather and air quality measurements to create synchronised streams. The module will run before NiFi and outside the main application. \textbf{Apache NiFi} will receive the simulated streams and retrieve daily timetables. It will save raw observations and timetables in HDFS and forward GPS, weather, and air quality events to \textbf{Apache Kafka}. Kafka will organise the incoming records into separate topics for the stream processing application.
 
 \subsection{Batch Layer}
 
@@ -669,9 +645,9 @@ The project work is divided among four team members, each responsible for a spec
 \textbf{Main responsible person:} Michał, \textbf{supporting team member:} Sebastian.
 
 \begin{itemize}
-    \item Selecting and testing the Warsaw open data API endpoints for vehicle positions, weather, air quality and timetables.
+    \item Selecting and testing data sources for vehicle positions and timetables (mkuran.pl) and for weather and air quality (Warsaw open data API).
     \item Creating scripts in order to retrieve data from external APIs.
-    \item Implementing a Python simulation module for 10-minute GPS buffering and interpolation of weather and air quality measurements.
+    \item Implementing a Python simulation module for 15-minute GPS buffering and interpolation of weather and air quality measurements.
     \item Configuring Apache NiFi to automate the data ingestion process, including daily retrieval of timetables.
     \item Storing raw copies of all collected data in HDFS (Raw layer).
     \item Configuring Apache Kafka topics, such as \texttt{gps}, \texttt{weather} and \texttt{air\_quality}.
