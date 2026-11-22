@@ -49,7 +49,7 @@
 }
 
 \title{
-    \textbf{Big Data Solution for Warsaw Public Transit delay prediction - Milestone 1 report} \\[0.5cm]
+    \textbf{Big Data Solution for Warsaw Public Transit delay prediction - Milestone 2 report} \\[0.5cm]
     \large Big Data Analytics
 }
 \author{Emil Łasocha \and Michał Szewczak \and Sebastian Trojan \and Tymoteusz Urban}
@@ -59,6 +59,22 @@
 
 \maketitle
 % \newpage
+
+\section{Updates to PM1 Report}
+
+The main business and technical assumptions presented in PM1 remain unchanged. However, three modifications were introduced during implementation:
+
+\subsection{Data Sources}
+
+GPS and GTFS data sources were changed from the Warsaw Open Data API to MKURAN. Unlike the original API, MKURAN provides \texttt{trip\_id} and \texttt{service\_date} alongside GPS observations, as well as ready-to-use GTFS files. This simplifies matching vehicle positions to scheduled trips and calculating delays, as identifying the correct trip for each vehicle independently would require a complex matching process based on location, time, and timetable data.
+
+\subsection{Removal of Hive Metastore}
+
+Hive Metastore was removed from the architecture, as Apache Spark can directly read and process Parquet files stored in HDFS. This simplifies the infrastructure and eliminates the need to maintain an additional service.
+
+\subsection{Simulation Buffering}
+
+The buffering period was increased from 10 to 15 minutes. Analysis of the weather and air quality APIs showed that although measurements have timestamps at 10-minute intervals, new data is not published simultaneously for all stations. Update delays vary between stations, and new measurements are not always available every 10 minutes. The longer buffer increases the likelihood that the necessary measurements will be available for proper synchronisation and interpolation before the simulated data is published.
 \section{Description}
 
 The goal of the project is to build a system that shows current delays in Warsaw's public transport, how they will change in the near future, and how these delays depend on weather and air conditions. The system will collect live positions of buses and trams, timetables, weather data and air quality data published by the city. By comparing the real position of a vehicle with its timetable we can calculate its delay. Then this information is combined with current weather and used both for live monitoring and for training a machine learning model that predicts delays.

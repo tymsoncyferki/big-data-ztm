@@ -33,10 +33,11 @@ dist/
 *.egg-info/
 
 # custom
-/milestone 1/report1.*
-!/milestone 1/report1.pdf
-!/milestone 1/report1.tex
-/milestone 1/report1-blx.bib
+/docs/milestone*/report*
+!/docs/milestone*/report*.pdf
+!/docs/milestone*/report*.tex
+!/docs/milestone*/report*.blx.bib
+
 
 .idea/
 /local
