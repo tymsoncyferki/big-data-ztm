@@ -10,6 +10,11 @@ mkdir -p "$(dirname "$OUT")"
 docker compose -f docker-compose.yml --profile analytics run --rm --no-deps -T \
   batch-runner /opt/spark/bin/spark-submit --master 'local[2]' \
   --driver-memory "${ML_DRIVER_MEMORY:-2g}" \
-  /opt/project/spark/ml/describe_sources.py "$@" > "$OUT.tmp"
+  /opt/project/spark/ml/describe_sources.py "$@" > "$OUT.log"
+# spark-submit merges the Python process's stderr into stdout, so the log lines
+# precede the JSON document: keep only the top-level JSON object (from '{' to '}' lines).
+sed -n '/^{/,/^}/p' "$OUT.log" > "$OUT.tmp"
+python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$OUT.tmp"
 mv "$OUT.tmp" "$OUT"
+rm -f "$OUT.log"
 echo "Saved $OUT ($(wc -c < "$OUT") bytes)"
