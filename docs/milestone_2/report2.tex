@@ -609,67 +609,88 @@ Rows from the last minutes cannot have a target yet, so they have has\_target se
 missing pings) also have no target and are not used for training. Movement, weather and air quality values can be empty, the
 \texttt{*\_missing} flags are kept as features.
 
-\section{Data Processing Steps}
+\section{Data Acquisition and Transformation}
+\label{sec:data-acquisition-transformation}
 
-The proposed solution is based on the Lambda Architecture, which combines the processing of current observations with the analysis of historical data. These paths support real-time delay predictions and historical statistics. Their results are brought together in a serving layer and displayed through a dashboard. Figure~\ref{fig:lambda-data-flow} presents the overall data flow.
+\subsection{Data Sources and Acquisition}
+
+The system uses GPS positions and GTFS timetables from MKURAN, together with weather and air quality measurements from Warsaw Open Data. Python collects the GPS and environmental data, while Apache NiFi downloads the GTFS ZIP archive separately.
+
+\subsection{Python Simulation and Synchronisation}
+
+The goal of the simulator is to provide a continuous stream of weather and air quality data alongside GPS positions. To achieve this, it uses linear interpolation to generate environmental observations every 30 seconds from measurements that stations typically update about every 10 minutes. Since interpolation requires both an earlier and a later reading, the environmental stream must be delayed.
+
+The same delay must be applied to GPS data to keep the streams aligned in time. An additional difficulty is that environmental measurements may be published later than their recorded timestamps, with different delays at different stations. The simulator therefore uses a 15-minute delay for both streams, increasing the likelihood that both measurements required for interpolation are available. If a later environmental measurement is still unavailable, the latest earlier value is used instead of interpolation.
+
+The Python application fetches GPS snapshots every 10 seconds and polls the weather and air quality APIs every 60 seconds. It uses \texttt{requests} and \texttt{ThreadPoolExecutor} to collect data concurrently and stores environmental readings separately for each station. After buffering, GPS snapshots are sent to Apache NiFi approximately every 10 seconds, while weather and air quality snapshots are each sent every 30 seconds. All snapshots are sent as JSON over HTTP.
+
+\subsection{Apache NiFi Ingestion and Routing}
+
+\paragraph{GPS, weather and air quality.}
+The simulator sends GPS, weather and air quality snapshots to three separate \texttt{ListenHTTP} endpoints in NiFi. Each flow uses \texttt{SplitJson} to separate the original snapshot from the individual records. The original JSON is assigned a UTC archive date, hour and filename by \texttt{UpdateAttribute}, then saved without modification to HDFS Raw using \texttt{PutHDFS}. The individual records follow separate processing paths according to their source:
+
+\begin{itemize}
+    \item \textbf{GPS.} \texttt{SplitJson} extracts individual positions from the \texttt{positions} array. \texttt{ValidateJson} checks each position, and \texttt{EvaluateJsonPath} extracts its trip ID, vehicle side number and timestamp. \texttt{DetectDuplicate} rejects repeated combinations of these fields. Finally, \texttt{UpdateAttribute} sets the ingestion time, \texttt{JoltTransformJSON} adds it to the JSON, and \texttt{PublishKafka} sends the event to the \texttt{gps} topic.
+    \item \textbf{Weather.} \texttt{SplitJson} extracts station observations from the \texttt{stations} array. Each observation is validated and its station identifier and measurement timestamp are extracted. \texttt{DetectDuplicate} removes repeated observations for the same station and time. \texttt{UpdateAttribute} and \texttt{JoltTransformJSON} add the ingestion time, and \texttt{PublishKafka} sends the result to the \texttt{weather} topic.
+    \item \textbf{Air quality.} NiFi first splits the snapshot into stations and validates each station record. It extracts station information, then uses another \texttt{SplitJson} processor to separate the pollutant measurements within that station. Each measurement is identified by station, pollutant code and timestamp, allowing \texttt{DetectDuplicate} to remove repeated values. \texttt{JoltTransformJSON} adds the station details and ingestion timestamp before the event is sent to the \texttt{air\_quality} topic.
+\end{itemize}
+
+For all three sources, invalid records, duplicates and processing failures are routed to logging or error paths rather than Kafka. The original snapshots remain available in HDFS Raw independently of these event-level checks.
+
+\paragraph{GTFS acquisition.}
+GTFS uses a separate scheduled NiFi flow. At 03:00 Warsaw time, \texttt{GenerateFlowFile} triggers \texttt{InvokeHTTP} to download the timetable ZIP archive from MKURAN. \texttt{UpdateAttribute} assigns the archive filename and date, and \texttt{PutHDFS} stores the ZIP in HDFS Raw. GTFS is not processed by the Python simulator or published to Kafka.
+
+\subsection{Raw Storage and Kafka Topics}
+
+HDFS stores the received snapshots in their original JSON format, organised by source and UTC archive date and hour. The GTFS timetable is kept as a ZIP archive. The main paths are:
+\begin{itemize}
+    \item GPS: \path{/data/raw/gps/date=YYYY-MM-DD/hour=HH/snapshot_*.json}
+    \item Weather: \path{/data/raw/weather/date=YYYY-MM-DD/hour=HH/weather_*.json}
+    \item Air quality: \path{/data/raw/air_quality/date=YYYY-MM-DD/hour=HH/air_quality_*.json}
+    \item GTFS: \path{/data/raw/gtfs/date=YYYY-MM-DD/warsaw_*.zip}
+\end{itemize}
+
+The streaming branch publishes individual JSON records to the Kafka topics \texttt{gps}, \texttt{weather} and \texttt{air\_quality}. HDFS Raw and Kafka are therefore two outputs of the same ingestion process. HDFS supplies historical batch processing, while Kafka supplies the planned continuous processing path.
+
+\section{System Architecture}
+\label{sec:system-architecture}
+
+The solution uses open-source technologies deployed with Docker Compose. It follows the Lambda Architecture, with a batch path for archived data and a speed path for incoming events. Both paths are designed to provide results through a common serving layer. Figure~\ref{fig:ztm-lambda-architecture} presents the components and the main data flows, including both implemented and planned parts.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\linewidth,height=0.8\textheight,keepaspectratio]{lambda_data_flow.png}
-    \caption{High-level data flow for stream and batch processing.}
-    \label{fig:lambda-data-flow}
+    \includegraphics[width=\linewidth]{lambda_architecture.png}
+    \caption{Lambda Architecture for Warsaw public transport data, showing implemented and planned components.}
+    \label{fig:ztm-lambda-architecture}
 \end{figure}
 
-\subsection{Data Ingestion}
+\subsection{Ingestion Layer (Implemented)}
 
-The system will collect three types of stream data: vehicle GPS positions, weather measurements, and air quality measurements. Public transport timetables will form a separate batch source, refreshed approximately once per day. A separate Python module will buffer GPS observations for 15 minutes and interpolate weather and air quality measurements within the corresponding windows. It will send synchronised streams to the ingestion component, while timetable data will be retrieved separately. The ingestion component will validate incoming data and store raw records in HDFS. GPS and environmental observations will also be forwarded to Kafka for stream processing.
+The ingestion layer connects the external data sources to the two processing paths. The Python simulator prepares time-aligned GPS and environmental snapshots, and NiFi routes them to HDFS Raw and Kafka. NiFi also archives GTFS timetables. The output is a persistent history of source messages in HDFS and a separate stream of validated events in Kafka.
 
-\subsection{Batch Processing}
+\subsection{Batch Layer (Partially Implemented)}
 
-The batch path will use historical data stored in HDFS. The data will be organised into three groups. Raw will contain the original source records. Cleaned will contain validated and standardised data. Processed will contain integrated datasets, estimated delays, and features prepared for further analysis. Apache Spark will perform the cleaning and processing steps, saving both the cleaned and processed datasets in HDFS in Parquet format.
+The Batch Layer uses Apache Spark to process historical data stored in HDFS. Its main tasks are to clean incoming observations, prepare datasets for machine learning, and provide reference data, trained models and historical statistics to the other layers.
 
-Historical GPS observations will be combined with timetables and environmental measurements to estimate delays. Spark will then calculate statistics such as average delays by line, stop, time period, and weather conditions. Historical datasets and aggregates will be retained in HDFS, while selected statistics will also be written to Cassandra for the dashboard.
+The batch pipeline runs every 15 minutes. It reads new GPS, weather and air quality files from HDFS Raw, using processing manifests to avoid processing the same files repeatedly. Spark validates the records, removes invalid data and duplicates, and standardises timestamps. The cleaned data is stored in HDFS as partitioned Parquet files with Snappy compression. Processing manifests are updated after successful writes.
 
-A prediction model will be trained and evaluated using the processed historical data. The trained model will be stored in HDFS for use by the stream path. The batch path will also provide the latest processed timetable for real-time calculations.
+The pipeline also processes GTFS timetables and prepares the \texttt{schedule\_stops} reference dataset for Spark Structured Streaming. This dataset contains planned stop and departure information needed to process incoming GPS observations. It is checked during each batch cycle and updated when a new service date or GTFS version requires it. Separately, historical datasets for machine learning are prepared and refreshed no more often than every 12 hours.
 
-\subsection{Stream Processing}
+Model training and historical data aggregation remain to be implemented. The delay prediction model will be trained and evaluated using Spark MLlib, then saved in HDFS for use by Spark Structured Streaming. In addition, historical delay statistics will be calculated and the aggregated results stored in Cassandra.
 
-The stream path will receive synchronised GPS, weather, and air quality events from Kafka. Current vehicle positions will be combined with environmental measurements and the latest processed timetable. The system will estimate current delays, prepare model features, and use the model trained in the batch path to predict future delays.
+\subsection{Speed Layer (Planned)}
 
-Current vehicle positions, environmental measurements, estimated delays, predictions, and real-time statistics will be written to Cassandra.
+Spark Structured Streaming will consume GPS, weather and air quality events from Kafka. It will validate and preprocess incoming records, align their timestamps and combine vehicle positions with environmental measurements and the timetable reference prepared by the Batch Layer. This will allow Spark to estimate current delays and prepare the features required by the prediction model.
 
-\subsection{Data Consumption}
+The application will load the trained model from HDFS and use it to predict vehicle delays. Current positions, environmental readings, estimated delays, predictions and real-time statistics will then be written to Cassandra.
 
-The Streamlit dashboard will read current information and historical aggregates from Cassandra. Users will be able to view vehicle positions, environmental conditions, historical delay patterns, and delay predictions in one application.
+\subsection{Serving Layer (Planned)}
 
-\section{Solution Architecture}
+Apache Cassandra will bring together current observations, delay estimates and predictions from the Speed Layer with historical aggregates produced by the Batch Layer. It will provide a common data source for the dashboard, supporting both live monitoring and analysis of past transport performance.
 
-The system will use open-source Big Data technologies organised into ingestion, batch, speed, serving, and consumption components. The solution will be deployed using Docker Compose, with the main components running in containers to simplify setup and integration. Figure~\ref{fig:lambda-architecture} shows the proposed technologies and their main connections.
+\subsection{Consumption Layer (Planned)}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\linewidth,height=0.8\textheight,keepaspectratio]{lambda_architecture.png}
-    \caption{Proposed technology architecture based on the Lambda model.}
-    \label{fig:lambda-architecture}
-\end{figure}
-
-\subsection{Ingestion Layer}
-
-A separate \textbf{Python simulation module} will buffer GPS observations for 15 minutes and interpolate weather and air quality measurements to create synchronised streams. The module will run before NiFi and outside the main application. \textbf{Apache NiFi} will receive the simulated streams and retrieve daily timetables. It will save raw observations and timetables in HDFS and forward GPS, weather, and air quality events to \textbf{Apache Kafka}. Kafka will organise the incoming records into separate topics for the stream processing application.
-
-\subsection{Batch Layer}
-
-\textbf{Hadoop HDFS} will store raw, cleaned, and processed data, as well as timetable snapshots and trained models. \textbf{Apache Spark} will clean and combine historical records, prepare datasets, and calculate aggregates. \textbf{Hive Metastore} will maintain table definitions for datasets stored in HDFS, allowing them to be accessed through Spark SQL.
-
-\textbf{Spark MLlib} will be used to train and evaluate the delay prediction model. The model will be saved in HDFS and made available to the speed layer.
-
-\subsection{Speed Layer}
-
-\textbf{Apache Spark Structured Streaming} will read events from Kafka and process current observations. It will use the latest timetable and the trained \textbf{Spark MLlib} model to calculate delays and generate predictions. Current observations, statistics, and predictions will be saved to Cassandra.
-
-\subsection{Serving Layer and Dashboard}
-
-\textbf{Apache Cassandra} will store current information from the speed layer and selected historical aggregates and model evaluation metrics from the batch layer. \textbf{Streamlit} will provide a dashboard that reads these results from Cassandra and presents them through interactive visualisations.
+A Streamlit dashboard will query Cassandra to display current vehicle positions, environmental conditions, delay estimates and predictions alongside historical delay statistics.
 
 \section{Analytical Approach}
 \label{sec:analytics}
