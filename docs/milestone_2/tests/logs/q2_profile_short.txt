@@ -1,0 +1,14 @@
+GPS (cleaned) vs GTFS trip_id match per service date
+service_date feed_version               gps_trip_ids   matched   rate
+2026-11-15   2026-11-15-a3774b136808            2854      2854   1.00
+2026-11-16   2026-11-16-97bb3c48eb14           25920     25920   1.00
+2026-11-17   2026-11-16-97bb3c48eb14           25763     25763   1.00
+2026-11-18   2026-11-18-7a92d2bd91df           33134     33134   1.00
+2026-11-19   2026-11-19-724dd1c9d761           33169     33169   1.00
+2026-11-20   2026-11-20-4539ba53c779           33352     33352   1.00
+2026-11-21   2026-11-21-4539ba53c779           20718     20718   1.00
+2026-11-22   2026-11-22-80544f8a73ce           19149     19149   1.00
+verdict: OK (>= 90% of GPS trip_ids exist in GTFS)
+
+gps_quality: {"rows": 30014074, "outside_warsaw_bbox": 42, "null_bearing": 1026749, "vehicles": 2261, "trip_ids": 194059, "service_date_far_from_event_date": 0}
+gtfs_stop_times: {"rows": 55489100, "null_departure_seconds": 0, "after_midnight_rows": 1624101, "max_departure_seconds": 106680}

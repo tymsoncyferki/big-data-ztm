@@ -1,0 +1,85 @@
+### stop_visits
+stop_visits: 4503708 rows, 15 columns
+-RECORD 0-----------------------------------------
+ trip_id            | 2026-11-17:507:PcS:5:1811   
+ service_date       | 2026-11-17                  
+ side_number        | 7877                        
+ stop_sequence      | 11                          
+ stop_id            | 704102                      
+ route_id           | 507                         
+ route_short_name   | 507                         
+ route_type         | 3                           
+ feed_version       | 2026-11-16-97bb3c48eb14     
+ visit_time_utc     | 2026-11-17 17:31:53         
+ scheduled_time_utc | 2026-11-17 17:30:00         
+ delay_s            | 113                         
+ delay_change_s     | -42                         
+ distance_m         | 1.3895910598536             
+ date               | 2026-11-17                  
+### ml_dataset
+ml_dataset: 10044790 rows, 44 columns
+-RECORD 0---------------------------------------------
+ event_time_utc         | 2026-11-17 16:14:03         
+ service_date           | 2026-11-17                  
+ trip_id                | 2026-11-17:340:PcS:747:1706 
+ side_number            | 8510                        
+ route_id               | 340                         
+ route_short_name       | 340                         
+ route_type             | 3                           
+ direction_id           | 0                           
+ lat                    | 52.335728                   
+ lon                    | 21.115345                   
+ hour_local             | 17                          
+ day_of_week            | 1                           
+ is_weekend             | false                       
+ is_rush_hour           | true                        
+ speed_kmh              | 22.987785716864575          
+ speed_avg_5min_kmh     | 7.797033346663125           
+ last_delay_s           | 383                         
+ last_delay_age_s       | 40                          
+ delay_change_s         | 120                         
+ last_stop_sequence     | 1                           
+ trip_last_sequence     | 18                          
+ trip_progress          | 0.05555555555555555         
+ temp_air               | 3.4                         
+ temp_road              | 4.3                         
+ humidity               | 99.9                        
+ wind_speed             | 0.0                         
+ wind_dir               | 45.0                        
+ precip_intensity       | 1.1                         
+ wind_dir_sin           | 0.7071067811865475          
+ wind_dir_cos           | 0.7071067811865476          
+ is_raining             | true                        
+ weather_station_dist_m | 6100.244882218854           
+ weather_missing        | false                       
+ air_pm10               | 12.558                      
+ air_pm10_dist_m        | 4488.786048128574           
+ air_pm2_5              | 9.886                       
+ air_pm2_5_dist_m       | 4488.786048128574           
+ air_no2                | 45.948                      
+ air_no2_dist_m         | 4488.786048128574           
+ air_missing            | false                       
+ target_delay_s         | 263                         
+ target_horizon_s       | 680                         
+ has_target             | true                        
+ date                   | 2026-11-17                  
+### schedule_stops
+schedule_stops: 2257470 rows, 17 columns
+-RECORD 0-----------------------------------------
+ feed_version       | 2026-11-21-4539ba53c779     
+ trip_id            | 2026-11-21:103:SbS:3:1328   
+ route_id           | 103                         
+ route_short_name   | 103                         
+ route_type         | 3                           
+ direction_id       | 0                           
+ trip_headsign      | Dw. Zachodni (Tunelowa)     
+ stop_sequence      | 22                          
+ stop_id            | 521101                      
+ stop_lat           | 52.249888                   
+ stop_lon           | 20.965025                   
+ cell_x             | 8386                        
+ cell_y             | 34833                       
+ sched_seconds      | 50100                       
+ sched_epoch        | 1795265700                  
+ trip_last_sequence | 32                          
+ service_date       | 2026-11-21                  

@@ -1,0 +1,36 @@
+============================= test session starts ==============================
+platform linux -- Python 3.10.12, pytest-9.2.0, pluggy-1.7.0 -- /usr/bin/python3
+rootdir: /opt/project
+collecting ... collected 29 items
+
+tests/test_cleaning.py::test_gps_cleaning_drops_bad_and_duplicate_rows PASSED [  3%]
+tests/test_cleaning.py::test_gtfs_seconds_after_midnight PASSED          [  6%]
+tests/test_cleaning.py::test_warsaw_local_time_converted_to_utc PASSED   [ 10%]
+tests/test_dwell.py::test_waiting_bus_is_timed_by_departure_not_arrival PASSED [ 13%]
+tests/test_dwell.py::test_passing_bus_still_uses_closest_ping PASSED     [ 17%]
+tests/test_dwell.py::test_dwell_tolerance_can_be_disabled PASSED         [ 20%]
+tests/test_ml_pipeline.py::test_every_stop_visit_found_with_right_delay PASSED [ 24%]
+tests/test_ml_pipeline.py::test_junk_pings_do_not_create_visits_or_rows PASSED [ 27%]
+tests/test_ml_pipeline.py::test_scheduled_time_uses_warsaw_time PASSED   [ 31%]
+tests/test_ml_pipeline.py::test_no_leakage_target_is_strictly_in_the_future PASSED [ 34%]
+tests/test_ml_pipeline.py::test_last_delay_is_never_from_the_future PASSED [ 37%]
+tests/test_ml_pipeline.py::test_environment_features_attached PASSED     [ 41%]
+tests/test_ml_pipeline.py::test_calendar_features_in_local_time PASSED   [ 44%]
+tests/test_ml_pipeline.py::test_rerun_is_idempotent PASSED               [ 48%]
+tests/test_ml_pipeline.py::test_report_numbers PASSED                    [ 51%]
+tests/test_ml_units.py::test_haversine_known_distance PASSED             [ 55%]
+tests/test_ml_units.py::test_service_day_start_normal_and_dst_days PASSED [ 58%]
+tests/test_ml_units.py::test_feed_selection PASSED                       [ 62%]
+tests/test_ml_units.py::test_air_column_name PASSED                      [ 65%]
+tests/test_profile.py::test_matching_trip_ids_are_reported_ok PASSED     [ 68%]
+tests/test_profile.py::test_completely_different_trip_id_format_is_a_failure PASSED [ 72%]
+tests/test_profile.py::test_gtfs_and_quality_summaries PASSED            [ 75%]
+tests/test_schedule_stops.py::test_schedule_dates PASSED                 [ 79%]
+tests/test_schedule_stops.py::test_build_content_and_after_midnight_times PASSED [ 82%]
+tests/test_schedule_stops.py::test_second_run_is_unchanged_and_force_rebuilds PASSED [ 86%]
+tests/test_schedule_stops.py::test_other_dates_are_not_touched PASSED    [ 89%]
+tests/test_schedule_stops.py::test_new_feed_version_replaces_the_partition PASSED [ 93%]
+tests/test_schedule_stops.py::test_missing_trip_services_is_not_an_error PASSED [ 96%]
+tests/test_schedule_stops.py::test_refuses_static_overwrite_mode PASSED  [100%]
+
+======================== 29 passed in 67.17s (0:01:07) =========================

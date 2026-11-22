@@ -1,0 +1,422 @@
+ Container big-data-ztm-batch-runner-run-ab1ed0d1f420 Creating 
+ Container big-data-ztm-batch-runner-run-ab1ed0d1f420 Created 
+{
+  "created": "2026-11-22T21:39:19Z",
+  "days": [
+    "2026-11-15",
+    "2026-11-16",
+    "2026-11-17",
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20",
+    "2026-11-21",
+    "2026-11-22"
+  ],
+  "gps": {
+    "present": true,
+    "per_day": [
+      {
+        "date": "2026-11-15",
+        "rows": 317755,
+        "distinct_side_number": 958,
+        "distinct_trip_id": 2827,
+        "first_event": "2026-11-15 21:17:35",
+        "last_event": "2026-11-16 00:59:59"
+      },
+      {
+        "date": "2026-11-16",
+        "rows": 3796605,
+        "distinct_side_number": 2099,
+        "distinct_trip_id": 26067,
+        "first_event": "2026-11-16 01:00:00",
+        "last_event": "2026-11-16 21:59:58"
+      },
+      {
+        "date": "2026-11-17",
+        "rows": 4081174,
+        "distinct_side_number": 2080,
+        "distinct_trip_id": 25745,
+        "first_event": "2026-11-17 08:54:20",
+        "last_event": "2026-11-18 00:59:59"
+      },
+      {
+        "date": "2026-11-18",
+        "rows": 5248485,
+        "distinct_side_number": 2094,
+        "distinct_trip_id": 33252,
+        "first_event": "2026-11-18 01:00:00",
+        "last_event": "2026-11-19 00:59:59"
+      },
+      {
+        "date": "2026-11-19",
+        "rows": 5150946,
+        "distinct_side_number": 2100,
+        "distinct_trip_id": 33301,
+        "first_event": "2026-11-19 01:00:00",
+        "last_event": "2026-11-20 00:59:58"
+      },
+      {
+        "date": "2026-11-20",
+        "rows": 5054011,
+        "distinct_side_number": 2100,
+        "distinct_trip_id": 33127,
+        "first_event": "2026-11-20 01:00:00",
+        "last_event": "2026-11-21 00:59:59"
+      },
+      {
+        "date": "2026-11-21",
+        "rows": 3362011,
+        "distinct_side_number": 1274,
+        "distinct_trip_id": 21236,
+        "first_event": "2026-11-21 01:00:00",
+        "last_event": "2026-11-22 00:59:59"
+      },
+      {
+        "date": "2026-11-22",
+        "rows": 3003087,
+        "distinct_side_number": 1205,
+        "distinct_trip_id": 19315,
+        "first_event": "2026-11-22 01:00:00",
+        "last_event": "2026-11-22 22:15:58"
+      }
+    ]
+  },
+  "gps_quality": {
+    "rows": 30014074,
+    "outside_warsaw_bbox": 42,
+    "null_bearing": 1026749,
+    "vehicles": 2261,
+    "trip_ids": 194059,
+    "service_date_far_from_event_date": 0
+  },
+  "weather": {
+    "present": true,
+    "per_day": [
+      {
+        "date": "2026-11-15",
+        "rows": 6272,
+        "distinct_station_id": 16,
+        "first_event": "2026-11-15 21:19:30",
+        "last_event": "2026-11-16 00:59:30"
+      },
+      {
+        "date": "2026-11-16",
+        "rows": 32000,
+        "distinct_station_id": 16,
+        "first_event": "2026-11-16 01:00:00",
+        "last_event": "2026-11-16 22:00:00"
+      },
+      {
+        "date": "2026-11-17",
+        "rows": 30816,
+        "distinct_station_id": 16,
+        "first_event": "2026-11-17 08:57:00",
+        "last_event": "2026-11-18 00:59:30"
+      },
+      {
+        "date": "2026-11-18",
+        "rows": 45536,
+        "distinct_station_id": 16,
+        "first_event": "2026-11-18 01:00:00",
+        "last_event": "2026-11-19 00:59:30"
+      },
+      {
+        "date": "2026-11-19",
+        "rows": 46080,
+        "distinct_station_id": 16,
+        "first_event": "2026-11-19 01:00:00",
+        "last_event": "2026-11-20 00:59:30"
+      },
+      {
+        "date": "2026-11-20",
+        "rows": 46080,
+        "distinct_station_id": 16,
+        "first_event": "2026-11-20 01:00:00",
+        "last_event": "2026-11-21 00:59:30"
+      },
+      {
+        "date": "2026-11-21",
+        "rows": 46080,
+        "distinct_station_id": 16,
+        "first_event": "2026-11-21 01:00:00",
+        "last_event": "2026-11-22 00:59:30"
+      },
+      {
+        "date": "2026-11-22",
+        "rows": 40880,
+        "distinct_station_id": 16,
+        "first_event": "2026-11-22 01:00:00",
+        "last_event": "2026-11-22 22:17:00"
+      }
+    ]
+  },
+  "air_quality": {
+    "present": true,
+    "per_day": [
+      {
+        "date": "2026-11-15",
+        "rows": 300272,
+        "distinct_station_id": 112,
+        "distinct_param_code": 12,
+        "first_event": "2026-11-15 21:19:30",
+        "last_event": "2026-11-16 00:59:30"
+      },
+      {
+        "date": "2026-11-16",
+        "rows": 1535871,
+        "distinct_station_id": 113,
+        "distinct_param_code": 12,
+        "first_event": "2026-11-16 01:00:00",
+        "last_event": "2026-11-16 22:00:00"
+      },
+      {
+        "date": "2026-11-17",
+        "rows": 1488798,
+        "distinct_station_id": 113,
+        "distinct_param_code": 12,
+        "first_event": "2026-11-17 08:57:00",
+        "last_event": "2026-11-18 00:59:30"
+      },
+      {
+        "date": "2026-11-18",
+        "rows": 2199958,
+        "distinct_station_id": 113,
+        "distinct_param_code": 12,
+        "first_event": "2026-11-18 01:00:00",
+        "last_event": "2026-11-19 00:59:30"
+      },
+      {
+        "date": "2026-11-19",
+        "rows": 2223618,
+        "distinct_station_id": 113,
+        "distinct_param_code": 12,
+        "first_event": "2026-11-19 01:00:00",
+        "last_event": "2026-11-20 00:59:30"
+      },
+      {
+        "date": "2026-11-20",
+        "rows": 2223360,
+        "distinct_station_id": 113,
+        "distinct_param_code": 12,
+        "first_event": "2026-11-20 01:00:00",
+        "last_event": "2026-11-21 00:59:30"
+      },
+      {
+        "date": "2026-11-21",
+        "rows": 2223360,
+        "distinct_station_id": 113,
+        "distinct_param_code": 12,
+        "first_event": "2026-11-21 01:00:00",
+        "last_event": "2026-11-22 00:59:30"
+      },
+      {
+        "date": "2026-11-22",
+        "rows": 1973232,
+        "distinct_station_id": 113,
+        "distinct_param_code": 12,
+        "first_event": "2026-11-22 01:00:00",
+        "last_event": "2026-11-22 22:17:30"
+      }
+    ]
+  },
+  "gtfs": {
+    "feeds": {
+      "2026-11-15-a3774b136808": {
+        "service_days": 31,
+        "first": "2026-11-15",
+        "last": "2026-12-15"
+      },
+      "2026-11-16-97bb3c48eb14": {
+        "service_days": 31,
+        "first": "2026-11-16",
+        "last": "2026-12-16"
+      },
+      "2026-11-18-7a92d2bd91df": {
+        "service_days": 31,
+        "first": "2026-11-18",
+        "last": "2026-12-18"
+      },
+      "2026-11-19-724dd1c9d761": {
+        "service_days": 31,
+        "first": "2026-11-19",
+        "last": "2026-12-19"
+      },
+      "2026-11-20-4539ba53c779": {
+        "service_days": 31,
+        "first": "2026-11-20",
+        "last": "2026-12-20"
+      },
+      "2026-11-21-4539ba53c779": {
+        "service_days": 31,
+        "first": "2026-11-20",
+        "last": "2026-12-20"
+      },
+      "2026-11-22-80544f8a73ce": {
+        "service_days": 31,
+        "first": "2026-11-22",
+        "last": "2026-12-22"
+      }
+    }
+  },
+  "trip_id_match": {
+    "service_dates": [
+      "2026-11-15",
+      "2026-11-16",
+      "2026-11-17",
+      "2026-11-18",
+      "2026-11-19",
+      "2026-11-20",
+      "2026-11-21",
+      "2026-11-22"
+    ],
+    "feed_by_service_date": {
+      "2026-11-15": "2026-11-15-a3774b136808",
+      "2026-11-16": "2026-11-16-97bb3c48eb14",
+      "2026-11-17": "2026-11-16-97bb3c48eb14",
+      "2026-11-18": "2026-11-18-7a92d2bd91df",
+      "2026-11-19": "2026-11-19-724dd1c9d761",
+      "2026-11-20": "2026-11-20-4539ba53c779",
+      "2026-11-21": "2026-11-21-4539ba53c779",
+      "2026-11-22": "2026-11-22-80544f8a73ce"
+    },
+    "per_service_date": [
+      {
+        "service_date": "2026-11-15",
+        "feed_version": "2026-11-15-a3774b136808",
+        "gps_trip_ids": 2854,
+        "matched": 2854,
+        "match_rate": 1.0,
+        "matched_by_some_other_feed": 0,
+        "sample_unmatched_gps_trip_ids": [],
+        "sample_gtfs_trip_ids": [
+          "2026-11-15:S1:NdS:15:1356",
+          "2026-11-15:S2:NdS:23:0412",
+          "2026-11-15:S3:NdS:32:0911",
+          "2026-11-15:S3:NdS:32:1953",
+          "2026-11-15:S4:NdS:44:0711"
+        ]
+      },
+      {
+        "service_date": "2026-11-16",
+        "feed_version": "2026-11-16-97bb3c48eb14",
+        "gps_trip_ids": 25920,
+        "matched": 25920,
+        "match_rate": 1.0,
+        "matched_by_some_other_feed": 25920,
+        "sample_unmatched_gps_trip_ids": [],
+        "sample_gtfs_trip_ids": [
+          "2026-11-16:S1:PcS:13:1229",
+          "2026-11-16:S3:PcS:32:1811",
+          "2026-11-16:S40:PcS:44:0852",
+          "2026-11-16:S40:PcS:47:1211",
+          "2026-11-17:S1:PcS:11:0548"
+        ]
+      },
+      {
+        "service_date": "2026-11-17",
+        "feed_version": "2026-11-16-97bb3c48eb14",
+        "gps_trip_ids": 25763,
+        "matched": 25763,
+        "match_rate": 1.0,
+        "matched_by_some_other_feed": 25763,
+        "sample_unmatched_gps_trip_ids": [],
+        "sample_gtfs_trip_ids": [
+          "2026-11-16:S1:PcS:13:1229",
+          "2026-11-16:S3:PcS:32:1811",
+          "2026-11-16:S40:PcS:44:0852",
+          "2026-11-16:S40:PcS:47:1211",
+          "2026-11-17:S1:PcS:11:0548"
+        ]
+      },
+      {
+        "service_date": "2026-11-18",
+        "feed_version": "2026-11-18-7a92d2bd91df",
+        "gps_trip_ids": 33134,
+        "matched": 33134,
+        "match_rate": 1.0,
+        "matched_by_some_other_feed": 33130,
+        "sample_unmatched_gps_trip_ids": [],
+        "sample_gtfs_trip_ids": [
+          "2026-11-18:S1:PcS:12:0929",
+          "2026-11-18:S1:PcS:15:0434",
+          "2026-11-18:S2:PcS:23:0626",
+          "2026-11-18:S3:PcS:31:0553",
+          "2026-11-19:S2:PcS:22:2112"
+        ]
+      },
+      {
+        "service_date": "2026-11-19",
+        "feed_version": "2026-11-19-724dd1c9d761",
+        "gps_trip_ids": 33169,
+        "matched": 33169,
+        "match_rate": 1.0,
+        "matched_by_some_other_feed": 33169,
+        "sample_unmatched_gps_trip_ids": [],
+        "sample_gtfs_trip_ids": [
+          "2026-11-19:S2:PcS:21:2326",
+          "2026-11-19:S3:PcS:31:0428",
+          "2026-11-19:S3:PcS:33:1253",
+          "2026-11-19:S40:PcS:43:0451",
+          "2026-11-19:S40:PcS:47:0711"
+        ]
+      },
+      {
+        "service_date": "2026-11-20",
+        "feed_version": "2026-11-20-4539ba53c779",
+        "gps_trip_ids": 33352,
+        "matched": 33352,
+        "match_rate": 1.0,
+        "matched_by_some_other_feed": 33352,
+        "sample_unmatched_gps_trip_ids": [],
+        "sample_gtfs_trip_ids": [
+          "2026-11-20:S2:PtS:22:1112",
+          "2026-11-20:S40:PtS:48:0552",
+          "2026-11-21:S1:SbS:11:0342",
+          "2026-11-21:S1:SbS:17:2128",
+          "2026-11-21:S2:SbS:21:0826"
+        ]
+      },
+      {
+        "service_date": "2026-11-21",
+        "feed_version": "2026-11-21-4539ba53c779",
+        "gps_trip_ids": 20718,
+        "matched": 20718,
+        "match_rate": 1.0,
+        "matched_by_some_other_feed": 20718,
+        "sample_unmatched_gps_trip_ids": [],
+        "sample_gtfs_trip_ids": [
+          "2026-11-20:S2:PtS:22:1112",
+          "2026-11-20:S40:PtS:48:0552",
+          "2026-11-21:S1:SbS:11:0342",
+          "2026-11-21:S1:SbS:17:2128",
+          "2026-11-21:S2:SbS:21:0826"
+        ]
+      },
+      {
+        "service_date": "2026-11-22",
+        "feed_version": "2026-11-22-80544f8a73ce",
+        "gps_trip_ids": 19149,
+        "matched": 19149,
+        "match_rate": 1.0,
+        "matched_by_some_other_feed": 19149,
+        "sample_unmatched_gps_trip_ids": [],
+        "sample_gtfs_trip_ids": [
+          "2026-11-22:S2:NdS:22:1726",
+          "2026-11-22:S2:NdS:23:2356",
+          "2026-11-22:S2:NdS:25:2312",
+          "2026-11-22:S4:NdS:42:1034",
+          "2026-11-23:S1:PcS:15:0559"
+        ]
+      }
+    ],
+    "verdict": "OK (>= 90% of GPS trip_ids exist in GTFS)"
+  },
+  "gtfs_stop_times": {
+    "rows": 55489100,
+    "null_departure_seconds": 0,
+    "after_midnight_rows": 1624101,
+    "max_departure_seconds": 106680
+  }
+}
+
+TRIP_ID VERDICT: OK (>= 90% of GPS trip_ids exist in GTFS)

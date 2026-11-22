@@ -1,0 +1,492 @@
+### stop_visits
+
+stop_visits: 4503708 rows, 15 columns
+
+root
+ |-- trip_id: string (nullable = true)
+ |-- service_date: date (nullable = true)
+ |-- side_number: string (nullable = true)
+ |-- stop_sequence: integer (nullable = true)
+ |-- stop_id: string (nullable = true)
+ |-- route_id: string (nullable = true)
+ |-- route_short_name: string (nullable = true)
+ |-- route_type: integer (nullable = true)
+ |-- feed_version: string (nullable = true)
+ |-- visit_time_utc: timestamp (nullable = true)
+ |-- scheduled_time_utc: timestamp (nullable = true)
+ |-- delay_s: integer (nullable = true)
+ |-- delay_change_s: integer (nullable = true)
+ |-- distance_m: double (nullable = true)
+ |-- date: string (nullable = true)
+
+-RECORD 0-----------------------------------------
+ trip_id            | 2026-11-17:507:PcS:5:1811   
+ service_date       | 2026-11-17                  
+ side_number        | 7877                        
+ stop_sequence      | 11                          
+ stop_id            | 704102                      
+ route_id           | 507                         
+ route_short_name   | 507                         
+ route_type         | 3                           
+ feed_version       | 2026-11-16-97bb3c48eb14     
+ visit_time_utc     | 2026-11-17 17:31:53         
+ scheduled_time_utc | 2026-11-17 17:30:00         
+ delay_s            | 113                         
+ delay_change_s     | -42                         
+ distance_m         | 1.3895910598536             
+ date               | 2026-11-17                  
+-RECORD 1-----------------------------------------
+ trip_id            | 2026-11-18:134:PcS:3:1933   
+ service_date       | 2026-11-18                  
+ side_number        | 8352                        
+ stop_sequence      | 11                          
+ stop_id            | 128302                      
+ route_id           | 134                         
+ route_short_name   | 134                         
+ route_type         | 3                           
+ feed_version       | 2026-11-18-7a92d2bd91df     
+ visit_time_utc     | 2026-11-18 18:53:09         
+ scheduled_time_utc | 2026-11-18 18:50:00         
+ delay_s            | 189                         
+ delay_change_s     | -1                          
+ distance_m         | 2.6563263943930178          
+ date               | 2026-11-18                  
+-RECORD 2-----------------------------------------
+ trip_id            | 2026-11-18:189:PcS:10:2312  
+ service_date       | 2026-11-18                  
+ side_number        | 8332                        
+ stop_sequence      | 6                           
+ stop_id            | 510801                      
+ route_id           | 189                         
+ route_short_name   | 189                         
+ route_type         | 3                           
+ feed_version       | 2026-11-18-7a92d2bd91df     
+ visit_time_utc     | 2026-11-18 22:20:13         
+ scheduled_time_utc | 2026-11-18 22:20:00         
+ delay_s            | 13                          
+ delay_change_s     | 1                           
+ distance_m         | 8.455291007668766           
+ date               | 2026-11-18                  
+-RECORD 3-----------------------------------------
+ trip_id            | 2026-11-19:128:PcS:405:1919 
+ service_date       | 2026-11-19                  
+ side_number        | 7209                        
+ stop_sequence      | 8                           
+ stop_id            | 700202                      
+ route_id           | 128                         
+ route_short_name   | 128                         
+ route_type         | 3                           
+ feed_version       | 2026-11-19-724dd1c9d761     
+ visit_time_utc     | 2026-11-19 18:35:14         
+ scheduled_time_utc | 2026-11-19 18:32:00         
+ delay_s            | 194                         
+ delay_change_s     | 128                         
+ distance_m         | 22.73110129455613           
+ date               | 2026-11-19                  
+-RECORD 4-----------------------------------------
+ trip_id            | 2026-11-21:136:SbS:11:1437  
+ service_date       | 2026-11-21                  
+ side_number        | 5891                        
+ stop_sequence      | 11                          
+ stop_id            | 313002                      
+ route_id           | 136                         
+ route_short_name   | 136                         
+ route_type         | 3                           
+ feed_version       | 2026-11-21-4539ba53c779     
+ visit_time_utc     | 2026-11-21 13:51:16         
+ scheduled_time_utc | 2026-11-21 13:51:00         
+ delay_s            | 16                          
+ delay_change_s     | 24                          
+ distance_m         | 5.8401868515012785          
+ date               | 2026-11-21                  
+
+### ml_dataset
+
+ml_dataset: 10044790 rows, 44 columns
+
+root
+ |-- event_time_utc: timestamp (nullable = true)
+ |-- service_date: date (nullable = true)
+ |-- trip_id: string (nullable = true)
+ |-- side_number: string (nullable = true)
+ |-- route_id: string (nullable = true)
+ |-- route_short_name: string (nullable = true)
+ |-- route_type: integer (nullable = true)
+ |-- direction_id: integer (nullable = true)
+ |-- lat: double (nullable = true)
+ |-- lon: double (nullable = true)
+ |-- hour_local: integer (nullable = true)
+ |-- day_of_week: integer (nullable = true)
+ |-- is_weekend: boolean (nullable = true)
+ |-- is_rush_hour: boolean (nullable = true)
+ |-- speed_kmh: double (nullable = true)
+ |-- speed_avg_5min_kmh: double (nullable = true)
+ |-- last_delay_s: integer (nullable = true)
+ |-- last_delay_age_s: long (nullable = true)
+ |-- delay_change_s: integer (nullable = true)
+ |-- last_stop_sequence: integer (nullable = true)
+ |-- trip_last_sequence: integer (nullable = true)
+ |-- trip_progress: double (nullable = true)
+ |-- temp_air: double (nullable = true)
+ |-- temp_road: double (nullable = true)
+ |-- humidity: double (nullable = true)
+ |-- wind_speed: double (nullable = true)
+ |-- wind_dir: double (nullable = true)
+ |-- precip_intensity: double (nullable = true)
+ |-- wind_dir_sin: double (nullable = true)
+ |-- wind_dir_cos: double (nullable = true)
+ |-- is_raining: boolean (nullable = true)
+ |-- weather_station_dist_m: double (nullable = true)
+ |-- weather_missing: boolean (nullable = true)
+ |-- air_pm10: double (nullable = true)
+ |-- air_pm10_dist_m: double (nullable = true)
+ |-- air_pm2_5: double (nullable = true)
+ |-- air_pm2_5_dist_m: double (nullable = true)
+ |-- air_no2: double (nullable = true)
+ |-- air_no2_dist_m: double (nullable = true)
+ |-- air_missing: boolean (nullable = true)
+ |-- target_delay_s: integer (nullable = true)
+ |-- target_horizon_s: long (nullable = true)
+ |-- has_target: boolean (nullable = true)
+ |-- date: string (nullable = true)
+
+-RECORD 0---------------------------------------------
+ event_time_utc         | 2026-11-17 16:14:03         
+ service_date           | 2026-11-17                  
+ trip_id                | 2026-11-17:340:PcS:747:1706 
+ side_number            | 8510                        
+ route_id               | 340                         
+ route_short_name       | 340                         
+ route_type             | 3                           
+ direction_id           | 0                           
+ lat                    | 52.335728                   
+ lon                    | 21.115345                   
+ hour_local             | 17                          
+ day_of_week            | 1                           
+ is_weekend             | false                       
+ is_rush_hour           | true                        
+ speed_kmh              | 22.987785716864575          
+ speed_avg_5min_kmh     | 7.797033346663125           
+ last_delay_s           | 383                         
+ last_delay_age_s       | 40                          
+ delay_change_s         | 120                         
+ last_stop_sequence     | 1                           
+ trip_last_sequence     | 18                          
+ trip_progress          | 0.05555555555555555         
+ temp_air               | 3.4                         
+ temp_road              | 4.3                         
+ humidity               | 99.9                        
+ wind_speed             | 0.0                         
+ wind_dir               | 45.0                        
+ precip_intensity       | 1.1                         
+ wind_dir_sin           | 0.7071067811865475          
+ wind_dir_cos           | 0.7071067811865476          
+ is_raining             | true                        
+ weather_station_dist_m | 6100.244882218854           
+ weather_missing        | false                       
+ air_pm10               | 12.558                      
+ air_pm10_dist_m        | 4488.786048128574           
+ air_pm2_5              | 9.886                       
+ air_pm2_5_dist_m       | 4488.786048128574           
+ air_no2                | 45.948                      
+ air_no2_dist_m         | 4488.786048128574           
+ air_missing            | false                       
+ target_delay_s         | 263                         
+ target_horizon_s       | 680                         
+ has_target             | true                        
+ date                   | 2026-11-17                  
+-RECORD 1---------------------------------------------
+ event_time_utc         | 2026-11-19 19:07:02         
+ service_date           | 2026-11-19                  
+ trip_id                | 2026-11-19:502:PcS:462:1952 
+ side_number            | 7849                        
+ route_id               | 502                         
+ route_short_name       | 502                         
+ route_type             | 3                           
+ direction_id           | 0                           
+ lat                    | 52.2348705                  
+ lon                    | 21.0785625                  
+ hour_local             | 20                          
+ day_of_week            | 3                           
+ is_weekend             | false                       
+ is_rush_hour           | false                       
+ speed_kmh              | 7.303559162707234           
+ speed_avg_5min_kmh     | 38.0160032791895            
+ last_delay_s           | 3                           
+ last_delay_age_s       | 59                          
+ delay_change_s         | -9                          
+ last_stop_sequence     | 8                           
+ trip_last_sequence     | 27                          
+ trip_progress          | 0.2962962962962963          
+ temp_air               | 7.0                         
+ temp_road              | 9.5                         
+ humidity               | 86.5                        
+ wind_speed             | 0.0                         
+ wind_dir               | 146.0                       
+ precip_intensity       | 1.4                         
+ wind_dir_sin           | 0.5591929034707469          
+ wind_dir_cos           | -0.8290375725550416         
+ is_raining             | true                        
+ weather_station_dist_m | 2485.390517862199           
+ weather_missing        | false                       
+ air_pm10               | 14.291                      
+ air_pm10_dist_m        | 840.9230140058119           
+ air_pm2_5              | 12.389                      
+ air_pm2_5_dist_m       | 840.9230140058119           
+ air_no2                | 39.75                       
+ air_no2_dist_m         | 840.9230140058119           
+ air_missing            | false                       
+ target_delay_s         | -18                         
+ target_horizon_s       | 640                         
+ has_target             | true                        
+ date                   | 2026-11-19                  
+-RECORD 2---------------------------------------------
+ event_time_utc         | 2026-11-20 22:41:03         
+ service_date           | 2026-11-20                  
+ trip_id                | 2026-11-20:520:PtS:1:2313   
+ side_number            | 7885                        
+ route_id               | 520                         
+ route_short_name       | 520                         
+ route_type             | 3                           
+ direction_id           | 1                           
+ lat                    | 52.2389978                  
+ lon                    | 21.1513145                  
+ hour_local             | 23                          
+ day_of_week            | 4                           
+ is_weekend             | false                       
+ is_rush_hour           | false                       
+ speed_kmh              | 27.510227120625345          
+ speed_avg_5min_kmh     | 21.477796816902984          
+ last_delay_s           | -37                         
+ last_delay_age_s       | 100                         
+ delay_change_s         | 22                          
+ last_stop_sequence     | 18                          
+ trip_last_sequence     | 21                          
+ trip_progress          | 0.8571428571428571          
+ temp_air               | -0.3                        
+ temp_road              | 0.8                         
+ humidity               | 88.6                        
+ wind_speed             | 0.1                         
+ wind_dir               | 128.0                       
+ precip_intensity       | 0.0                         
+ wind_dir_sin           | 0.788010753606722           
+ wind_dir_cos           | -0.6156614753256583         
+ is_raining             | false                       
+ weather_station_dist_m | 2461.4290464382275          
+ weather_missing        | false                       
+ air_pm10               | 30.741                      
+ air_pm10_dist_m        | 1312.585662167968           
+ air_pm2_5              | 27.698                      
+ air_pm2_5_dist_m       | 1312.585662167968           
+ air_no2                | 16.46                       
+ air_no2_dist_m         | 1312.585662167968           
+ air_missing            | false                       
+ target_delay_s         | NULL                        
+ target_horizon_s       | NULL                        
+ has_target             | false                       
+ date                   | 2026-11-20                  
+-RECORD 3---------------------------------------------
+ event_time_utc         | 2026-11-20 12:25:02         
+ service_date           | 2026-11-20                  
+ trip_id                | 2026-11-20:L52:PtS:576:1344 
+ side_number            | 70050                       
+ route_id               | L52                         
+ route_short_name       | L52                         
+ route_type             | 3                           
+ direction_id           | 0                           
+ lat                    | 52.075045                   
+ lon                    | 21.0294655                  
+ hour_local             | 13                          
+ day_of_week            | 4                           
+ is_weekend             | false                       
+ is_rush_hour           | false                       
+ speed_kmh              | 0.0948236866086819          
+ speed_avg_5min_kmh     | 9.65601841938184            
+ last_delay_s           | NULL                        
+ last_delay_age_s       | NULL                        
+ delay_change_s         | NULL                        
+ last_stop_sequence     | NULL                        
+ trip_last_sequence     | 18                          
+ trip_progress          | NULL                        
+ temp_air               | 5.5                         
+ temp_road              | 7.2                         
+ humidity               | 84.3                        
+ wind_speed             | 1.6                         
+ wind_dir               | 243.0                       
+ precip_intensity       | 0.0                         
+ wind_dir_sin           | -0.8910065241883678         
+ wind_dir_cos           | -0.4539904997395469         
+ is_raining             | false                       
+ weather_station_dist_m | 7298.279908062278           
+ weather_missing        | false                       
+ air_pm10               | 2.72                        
+ air_pm10_dist_m        | 4066.8692333357644          
+ air_pm2_5              | 2.45                        
+ air_pm2_5_dist_m       | 4066.8692333357644          
+ air_no2                | 13.01                       
+ air_no2_dist_m         | 4066.8692333357644          
+ air_missing            | false                       
+ target_delay_s         | NULL                        
+ target_horizon_s       | NULL                        
+ has_target             | false                       
+ date                   | 2026-11-20                  
+-RECORD 4---------------------------------------------
+ event_time_utc         | 2026-11-21 21:37:18         
+ service_date           | 2026-11-21                  
+ trip_id                | 2026-11-21:9:SbS:28:2222    
+ side_number            | 3257                        
+ route_id               | 9                           
+ route_short_name       | 9                           
+ route_type             | 0                           
+ direction_id           | 1                           
+ lat                    | 52.21606                    
+ lon                    | 20.980854                   
+ hour_local             | 22                          
+ day_of_week            | 5                           
+ is_weekend             | true                        
+ is_rush_hour           | false                       
+ speed_kmh              | 5.629051973944953           
+ speed_avg_5min_kmh     | 13.650057332240971          
+ last_delay_s           | -27                         
+ last_delay_age_s       | 45                          
+ delay_change_s         | 0                           
+ last_stop_sequence     | 12                          
+ trip_last_sequence     | 28                          
+ trip_progress          | 0.42857142857142855         
+ temp_air               | 3.8                         
+ temp_road              | 5.0                         
+ humidity               | 82.8                        
+ wind_speed             | 2.6                         
+ wind_dir               | 218.0                       
+ precip_intensity       | 1.5                         
+ wind_dir_sin           | -0.6156614753256582         
+ wind_dir_cos           | -0.788010753606722          
+ is_raining             | true                        
+ weather_station_dist_m | 4259.518979201527           
+ weather_missing        | false                       
+ air_pm10               | 22.008                      
+ air_pm10_dist_m        | 703.7137483349559           
+ air_pm2_5              | 15.06                       
+ air_pm2_5_dist_m       | 703.7137483349559           
+ air_no2                | 20.724                      
+ air_no2_dist_m         | 703.7137483349559           
+ air_missing            | false                       
+ target_delay_s         | -87                         
+ target_horizon_s       | 675                         
+ has_target             | true                        
+ date                   | 2026-11-21                  
+
+### schedule_stops
+
+schedule_stops: 2257470 rows, 17 columns
+
+root
+ |-- feed_version: string (nullable = true)
+ |-- trip_id: string (nullable = true)
+ |-- route_id: string (nullable = true)
+ |-- route_short_name: string (nullable = true)
+ |-- route_type: integer (nullable = true)
+ |-- direction_id: integer (nullable = true)
+ |-- trip_headsign: string (nullable = true)
+ |-- stop_sequence: integer (nullable = true)
+ |-- stop_id: string (nullable = true)
+ |-- stop_lat: double (nullable = true)
+ |-- stop_lon: double (nullable = true)
+ |-- cell_x: integer (nullable = true)
+ |-- cell_y: integer (nullable = true)
+ |-- sched_seconds: integer (nullable = true)
+ |-- sched_epoch: long (nullable = true)
+ |-- trip_last_sequence: integer (nullable = true)
+ |-- service_date: string (nullable = true)
+
+-RECORD 0-----------------------------------------
+ feed_version       | 2026-11-21-4539ba53c779     
+ trip_id            | 2026-11-21:103:SbS:3:1328   
+ route_id           | 103                         
+ route_short_name   | 103                         
+ route_type         | 3                           
+ direction_id       | 0                           
+ trip_headsign      | Dw. Zachodni (Tunelowa)     
+ stop_sequence      | 22                          
+ stop_id            | 521101                      
+ stop_lat           | 52.249888                   
+ stop_lon           | 20.965025                   
+ cell_x             | 8386                        
+ cell_y             | 34833                       
+ sched_seconds      | 50100                       
+ sched_epoch        | 1795265700                  
+ trip_last_sequence | 32                          
+ service_date       | 2026-11-21                  
+-RECORD 1-----------------------------------------
+ feed_version       | 2026-11-21-4539ba53c779     
+ trip_id            | 2026-11-21:172:SbS:5:0901   
+ route_id           | 172                         
+ route_short_name   | 172                         
+ route_type         | 3                           
+ direction_id       | 1                           
+ trip_headsign      | CH Blue City                
+ stop_sequence      | 21                          
+ stop_id            | 411301                      
+ stop_lat           | 52.204008                   
+ stop_lon           | 20.975571                   
+ cell_x             | 8390                        
+ cell_y             | 34802                       
+ sched_seconds      | 34440                       
+ sched_epoch        | 1795250040                  
+ trip_last_sequence | 30                          
+ service_date       | 2026-11-21                  
+-RECORD 2-----------------------------------------
+ feed_version       | 2026-11-22-80544f8a73ce     
+ trip_id            | 2026-11-22:158:NdS:624:1445 
+ route_id           | 158                         
+ route_short_name   | 158                         
+ route_type         | 3                           
+ direction_id       | 0                           
+ trip_headsign      | Witolin                     
+ stop_sequence      | 16                          
+ stop_id            | 213102                      
+ stop_lat           | 52.237693                   
+ stop_lon           | 21.050488                   
+ cell_x             | 8420                        
+ cell_y             | 34825                       
+ sched_seconds      | 54660                       
+ sched_epoch        | 1795356660                  
+ trip_last_sequence | 27                          
+ service_date       | 2026-11-22                  
+-RECORD 3-----------------------------------------
+ feed_version       | 2026-11-22-80544f8a73ce     
+ trip_id            | 2026-11-23:17:PcS:11:2408   
+ route_id           | 17                          
+ route_short_name   | 17                          
+ route_type         | 0                           
+ direction_id       | 1                           
+ trip_headsign      | Zjazd do zajezdni Mokotów   
+ stop_sequence      | 2                           
+ stop_id            | 325101                      
+ stop_lat           | 52.180152                   
+ stop_lon           | 20.994128                   
+ cell_x             | 8397                        
+ cell_y             | 34786                       
+ sched_seconds      | 86940                       
+ sched_epoch        | 1795475340                  
+ trip_last_sequence | 8                           
+ service_date       | 2026-11-23                  
+-RECORD 4-----------------------------------------
+ feed_version       | 2026-11-22-80544f8a73ce     
+ trip_id            | 2026-11-23:211:PcS:1:0911   
+ route_id           | 211                         
+ route_short_name   | 211                         
+ route_type         | 3                           
+ direction_id       | 1                           
+ trip_headsign      | Żerań FSO                   
+ stop_sequence      | 18                          
+ stop_id            | 121902                      
+ stop_lat           | 52.318856                   
+ stop_lon           | 20.966187                   
+ cell_x             | 8386                        
+ cell_y             | 34879                       
+ sched_seconds      | 34560                       
+ sched_epoch        | 1795422960                  
+ trip_last_sequence | 29                          
+ service_date       | 2026-11-23                  
+

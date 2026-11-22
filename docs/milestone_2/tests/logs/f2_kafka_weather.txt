@@ -1,0 +1,8 @@
+Stacja Bielany	{"lokalizacja":"Stacja Bielany","lat":52.29241,"lon":20.97288,"czas":"2026-11-22 22:22:00","temp_pow":2.6,"temp_naw":3.2,"wilg_pow":84.5,"pred_wiatru":2.1,"kier_wiatru":307.0,"int_opadu":0.0,"ingested_at":"2026-11-22T21:37:00.121Z"}
+Stacja Krakowska	{"lokalizacja":"Stacja Krakowska","lat":52.1752,"lon":20.94439,"czas":"2026-11-22 22:22:00","temp_pow":2.5,"temp_naw":3.7,"wilg_pow":87.4,"pred_wiatru":1.2,"kier_wiatru":79.0,"int_opadu":1.0,"ingested_at":"2026-11-22T21:37:00.121Z"}
+Stacja Most Północny	{"lokalizacja":"Stacja Most Północny","lat":52.306633,"lon":20.951622,"czas":"2026-11-22 22:22:00","temp_pow":2.7,"temp_naw":3.7,"wilg_pow":89.4,"pred_wiatru":2.6,"kier_wiatru":195.0,"int_opadu":0.0,"ingested_at":"2026-11-22T21:37:00.121Z"}
+Stacja Płochocińska	{"lokalizacja":"Stacja Płochocińska","lat":52.32749,"lon":21.02923,"czas":"2026-11-22 22:22:00","temp_pow":2.6,"temp_naw":2.6,"wilg_pow":100.0,"pred_wiatru":2.3,"kier_wiatru":112.0,"int_opadu":1.1,"ingested_at":"2026-11-22T21:37:00.121Z"}
+Stacja Radzymińska	{"lokalizacja":"Stacja Radzymińska","lat":52.279388,"lon":21.069359,"czas":"2026-11-22 22:22:00","temp_pow":2.5,"temp_naw":3.8,"wilg_pow":84.7,"pred_wiatru":0.5,"kier_wiatru":206.0,"int_opadu":0.0,"ingested_at":"2026-11-22T21:37:00.121Z"}
+
+### The record from the NiFi provenance screenshot, found in Kafka (partition/offset):
+Partition:2	Offset:130153	{"lokalizacja":"Stacja Żołnierska","lat":52.258767,"lon":21.142468,"czas":"2026-11-22 21:56:30","temp_pow":2.5,"temp_naw":3.1,"wilg_pow":84.5,"pred_wiatru":1.3,"kier_wiatru":229.0,"int_opadu":0.0,"ingested_at":"2026-11-22T21:11:30.227Z"}

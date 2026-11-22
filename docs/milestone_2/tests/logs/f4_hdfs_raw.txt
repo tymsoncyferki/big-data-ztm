@@ -1,0 +1,14 @@
+### gps: latest files
+-rw-r--r--   1 nifi supergroup     174568 2026-11-22 22:22 /data/raw/gps/date=2026-11-22/hour=21/snapshot_20261122_212238_fec21d78-e8cd-4fc1-abeb-ba038a42b8ef.json
+-rw-r--r--   1 nifi supergroup     174568 2026-11-22 22:22 /data/raw/gps/date=2026-11-22/hour=21/snapshot_20261122_212248_439c586a-6759-49c5-ab59-ef92278bf09e.json
+-rw-r--r--   1 nifi supergroup     174423 2026-11-22 22:22 /data/raw/gps/date=2026-11-22/hour=21/snapshot_20261122_212258_f9f822d0-4455-4ee5-a303-8e1bff5ad3c7.json
+### weather: latest files
+-rw-r--r--   1 nifi supergroup       3483 2026-11-22 22:22 /data/raw/weather/date=2026-11-22/hour=21/weather_20261122_212200_852b1462-f792-4208-8548-01c47610e6af.json
+-rw-r--r--   1 nifi supergroup       3540 2026-11-22 22:22 /data/raw/weather/date=2026-11-22/hour=21/weather_20261122_212230_75e9d306-8fba-4f72-b72b-260de98c2c49.json
+-rw-r--r--   1 nifi supergroup       3514 2026-11-22 22:23 /data/raw/weather/date=2026-11-22/hour=21/weather_20261122_212300_e2bbeab3-d6d1-4c6e-94e6-a208ce85ba54.json
+### air_quality: latest files
+-rw-r--r--   1 nifi supergroup     139434 2026-11-22 22:22 /data/raw/air_quality/date=2026-11-22/hour=21/air_quality_20261122_212200_a25a59c5-689d-4a01-a9b4-36570fc76954.json
+-rw-r--r--   1 nifi supergroup     139727 2026-11-22 22:22 /data/raw/air_quality/date=2026-11-22/hour=21/air_quality_20261122_212230_e8023fd2-3204-42eb-9750-c4e2796ef289.json
+-rw-r--r--   1 nifi supergroup     139345 2026-11-22 22:23 /data/raw/air_quality/date=2026-11-22/hour=21/air_quality_20261122_212300_4af15a15-9106-4a25-bb26-7fb3ad623fb1.json
+### content of /data/raw/weather/date=2026-11-22/hour=21/weather_20261122_212300_e2bbeab3-d6d1-4c6e-94e6-a208ce85ba54.json (first 800 bytes)
+{"stations": [{"lokalizacja": "Stacja Bielany", "lat": 52.29241, "lon": 20.97288, "czas": "2026-11-22 22:08:00", "temp_pow": 2.7, "temp_naw": 3.2, "wilg_pow": 84.26, "pred_wiatru": 1.72, "kier_wiatru": 298.8, "int_opadu": 0.0}, {"lokalizacja": "Stacja Czecha", "lat": 52.2243019, "lon": 21.2067467, "czas": "2026-11-22 22:08:00", "temp_pow": 2.72, "temp_naw": 3.2, "wilg_pow": 82.16, "pred_wiatru": 1.06, "kier_wiatru": 263.0, "int_opadu": 0.0}, {"lokalizacja": "Stacja Drewny", "lat": 52.12747, "lon": 21.09678, "czas": "2026-11-22 22:08:00", "temp_pow": 2.6, "temp_naw": 2.7, "wilg_pow": 95.66, "pred_wiatru": 1.78, "kier_wiatru": 220.6, "int_opadu": 0.0}, {"lokalizacja": "Stacja Izbicka", "lat": 52.17932, "lon": 21.23288, "czas": "2026-11-22 22:08:00", "temp_pow": 2.4, "temp_naw": 2.7, "wilg_po

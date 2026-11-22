@@ -1,0 +1,242 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{img/}}
+\lstset{basicstyle=\ttfamily\scriptsize, breaklines=true, frame=single,
+        columns=fullflexible, keepspaces=true,
+        % listings + pdflatex cannot read UTF-8: map Polish letters (station names in logs)
+        literate={ą}{{\k{a}}}1 {ć}{{\'c}}1 {ę}{{\k{e}}}1 {ł}{{\l}}1 {ń}{{\'n}}1
+                 {ó}{{\'o}}1 {ś}{{\'s}}1 {ź}{{\'z}}1 {ż}{{\.z}}1
+                 {Ą}{{\k{A}}}1 {Ć}{{\'C}}1 {Ę}{{\k{E}}}1 {Ł}{{\L}}1 {Ń}{{\'N}}1
+                 {Ó}{{\'O}}1 {Ś}{{\'S}}1 {Ź}{{\'Z}}1 {Ż}{{\.Z}}1 {°}{{\textdegree}}1
+                 {µ}{{$\mu$}}1 {³}{{$^3$}}1}
+
+% Evidence helpers: show a red placeholder until the file exists.
+% \evidimg{file in img/}{caption}{label}
+\newcommand{\evidimg}[3]{%
+  \begin{figure}[H]\centering
+    \IfFileExists{img/#1}%
+      {\includegraphics[width=\linewidth,height=0.4\textheight,keepaspectratio]{#1}}%
+      {\fbox{\parbox{0.8\linewidth}{\centering\color{red}missing: img/#1}}}%
+    \caption{#2}\label{#3}
+  \end{figure}}
+% \evidlog{file in logs/}{caption}{label}
+% Logs are listings (they can break across pages) numbered together with figures.
+\renewcommand{\lstlistingname}{Figure}
+\makeatletter
+\AtBeginDocument{\let\c@lstlisting\c@figure\let\thelstlisting\thefigure}
+\makeatother
+\newcommand{\evidlog}[3]{%
+  \IfFileExists{logs/#1}%
+    {\lstinputlisting[caption={#2},label={#3},captionpos=b]{logs/#1}}%
+    {\begin{figure}[H]\centering
+       \fbox{\parbox{0.8\linewidth}{\centering\color{red}missing: logs/#1}}%
+       \caption{#2}\label{#3}
+     \end{figure}}}
+% Placeholder for the "Actual result" column until the test is run
+\newcommand{\todo}{\textcolor{red}{TODO}}
+
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{
+    \textbf{Big Data Solution for Warsaw Public Transit delay prediction - Milestone 2 tests} \\[0.5cm]
+    \large Big Data Analytics
+}
+\author{Emil Łasocha \and Michał Szewczak \and Sebastian Trojan \and Tymoteusz Urban}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Testing}
+
+This document presents the functional tests of the data acquisition and preprocessing modules
+as well as the quality tests of the data transformations. All tests were run on the full Docker
+deployment (NiFi, Kafka, HDFS, Spark) with live data acquisition turned on. Screenshots and logs
+are in the Appendix (Section~\ref{sec:appendix}).
+
+\subsection{Functional Tests}
+
+The functional tests check that the acquisition and preprocessing modules work as intended. We test
+if NiFi receives GPS, weather and air quality data from the simulator and publishes it to Kafka,
+if raw snapshots and GTFS archives are saved in HDFS, and if Spark cleans the raw data and builds
+the enriched datasets.
+
+\subsection{Quality Tests}
+
+The quality tests check that the transformations give correct data. We run unit tests on synthetic
+data with known results, check if GPS trips match the GTFS timetable and compare raw and cleaned
+data.
+
+\subsection{Test Cases}
+
+Every test case has a test objective, test steps, expected result and actual result. The actual
+result column also points to the figures in the Appendix.
+
+\begingroup
+\small
+\begin{longtable}{|P{0.6cm}|P{2.4cm}|P{4.6cm}|P{3cm}|P{3cm}|}
+\hline
+\textbf{ID} & \textbf{Test Objective} & \textbf{Test Steps} & \textbf{Expected Result} & \textbf{Actual Result} \\
+\hline
+\endhead
+\multicolumn{5}{|l|}{\textit{Functional tests}} \\
+\hline
+F1 & GPS ingestion in NiFi and publication to Kafka &
+1. Start data acquisition \newline
+2. Open the GPS flow in NiFi and check provenance of the Kafka publisher \newline
+3. Check key fields (\texttt{trip\_id}, \texttt{side\_number}, \texttt{lat}, \texttt{lon}, \texttt{timestamp}) \newline
+4. Read messages from Kafka topic \texttt{gps} &
+One message per vehicle position, same values in NiFi and Kafka &
+Pass. The record from provenance (vehicle V/162/2) was in Kafka with the same values. \newline Fig.~\ref{fig:f1-flow}, \ref{fig:f1-prov}, \ref{fig:f1-kafka} \\
+\hline
+F2 & Weather ingestion in NiFi and publication to Kafka &
+1. Open the weather flow in NiFi and check provenance of the Kafka publisher \newline
+2. Check key fields (\texttt{lokalizacja}, \texttt{czas}, \texttt{temp\_pow}, \texttt{wilg\_pow}) \newline
+3. Read messages from Kafka topic \texttt{weather} &
+One message per station, same values in NiFi and Kafka &
+Pass. The record of station Żołnierska was in Kafka with the same values. \newline Fig.~\ref{fig:f2-flow}, \ref{fig:f2-prov}, \ref{fig:f2-kafka} \\
+\hline
+F3 & Air quality ingestion in NiFi and publication to Kafka &
+1. Open the air quality flow in NiFi and check provenance of the Kafka publisher \newline
+2. Check key fields (\texttt{name}, \texttt{param\_code}, \texttt{value}, \texttt{unit}, \texttt{time}) \newline
+3. Read messages from Kafka topic \texttt{air\_quality} &
+One message per parameter and station, same values in NiFi and Kafka &
+Pass. The record Warszawa-12792 was in Kafka with the same values. \newline Fig.~\ref{fig:f3-flow}, \ref{fig:f3-prov}, \ref{fig:f3-kafka} \\
+\hline
+F4 & Raw snapshots saved in HDFS &
+1. List the latest files in \texttt{/data/raw/gps}, \texttt{weather} and \texttt{air\_quality} \newline
+2. Check the date and hour partitions \newline
+3. Show the content of one snapshot &
+JSON snapshots are saved all the time in date and hour partitions &
+Pass. New snapshots every 10 s (GPS) and every 30 s (weather, air quality). \newline Fig.~\ref{fig:f4-raw}, \ref{fig:f4-browser} \\
+\hline
+F5 & GTFS download &
+1. Open the GTFS flow in NiFi \newline
+2. List \texttt{/data/raw/gtfs} in HDFS &
+A GTFS ZIP file is saved every day &
+Pass. 7 archives for 15-22 November, 17 November is missing because acquisition was stopped. \newline Fig.~\ref{fig:f5-nifi}, \ref{fig:f5-hdfs} \\
+\hline
+F6 & Spark cleaning from Raw to Cleaned &
+1. Wait for a scheduled batch \newline
+2. Check the scheduler log \newline
+3. List Parquet partitions in \texttt{/data/cleaned} &
+Batch finishes without errors and new data is saved as Parquet &
+Pass. Two batches in a row finished correctly. \newline Fig.~\ref{fig:f6-batch} \\
+\hline
+F7 & Spark enrichment from Cleaned to Enriched &
+1. List datasets in \texttt{/data/enriched} \newline
+2. Show sample rows (\texttt{show-sample.sh}) &
+Enriched datasets exist and contain delays, features and the target &
+Pass. \texttt{stop\_visits} has 4.5 million rows, \texttt{ml\_dataset} 10 million rows. \newline Fig.~\ref{fig:f7-hdfs}, \ref{fig:f7-sample} \\
+\hline
+\multicolumn{5}{|l|}{\textit{Quality tests}} \\
+\hline
+Q1 & Correctness of transformations &
+1. Run unit tests in the Spark container &
+All tests pass &
+Pass. 29 of 29 tests passed. \newline Fig.~\ref{fig:q1-pytest} \\
+\hline
+Q2 & GPS and GTFS consistency &
+1. Run \texttt{profile-data.sh} \newline
+2. Check how many GPS trip ids are found in GTFS &
+Almost all GPS trips are found in GTFS &
+Pass. 100\% of trip ids matched on every day. \newline Fig.~\ref{fig:q2-profile} \\
+\hline
+Q3 & Quality of raw and cleaned data &
+1. Run \texttt{describe-sources.sh} \newline
+2. Compare record counts, missing values and removed records &
+Cleaned data has no duplicates or invalid records &
+Pass with remarks (Section~\ref{sec:q3}). \newline Table~\ref{tab:q3} \\
+\hline
+\end{longtable}
+\endgroup
+
+\subsection{Data Quality Statistics}\label{sec:q3}
+
+Table~\ref{tab:q3} compares raw and cleaned records for one full day (21 November 2026).
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|r|r|r|P{4.5cm}|}
+\hline
+\textbf{Dataset} & \textbf{Raw records} & \textbf{Cleaned} & \textbf{Removed} & \textbf{Missing or wrong values} \\
+\hline
+GPS & 7001611 & 3362210 & 52\% & none \\
+\hline
+Weather & 46080 & 46080 & 0\% & around 500 values -32000 \\
+\hline
+Air quality & 2226240 & 2223360 & 0.13\% & none \\
+\hline
+\end{tabular}
+\caption{Raw and cleaned data on 21 November 2026 (Q3).}
+\label{tab:q3}
+\end{table}
+
+It can be seen that most of the removed GPS records are duplicates. The simulator asks for data every 10 s,
+but it turned out that the source updates positions only about every 20 s, so the same position comes twice.
+The weather API puts -32000 in place of missing values - these values are replaced with NULL when the ML dataset is built.
+All sources have data in about 152 of 165 hours, the missing hours are the time
+when acquisition was stopped, not a pipeline failure.
+
+\subsection{Summary}
+
+All functional tests passed. Data from the three live sources goes through NiFi to HDFS and Kafka
+without changes, GTFS is downloaded every day and Spark cleans and enriches the data on schedule.
+The quality tests confirm that the transformations are correct (29 of 29 unit tests) and that all
+GPS trips match the timetable. The found problems (duplicates and -32000 values) are handled in
+the pipeline.
+
+\newpage
+\section{Appendix}\label{sec:appendix}
+
+\subsection*{F1 - GPS}
+\evidimg{f1_nifi_flow.png}{GPS Ingestion flow in NiFi}{fig:f1-flow}
+\evidimg{f1_nifi_provenance.png}{Provenance of \textit{Publish GPS to Kafka}}{fig:f1-prov}
+\evidlog{f1_kafka_gps.txt}{Messages in Kafka topic \texttt{gps}}{fig:f1-kafka}
+
+\subsection*{F2 - Weather}
+\evidimg{f2_nifi_flow.png}{Weather Ingestion flow in NiFi}{fig:f2-flow}
+\evidimg{f2_nifi_provenance.png}{Provenance of \textit{Publish Weather to Kafka}}{fig:f2-prov}
+\evidlog{f2_kafka_weather.txt}{Messages in Kafka topic \texttt{weather}}{fig:f2-kafka}
+
+\subsection*{F3 - Air quality}
+\evidimg{f3_nifi_flow.png}{Air Quality Ingestion flow in NiFi}{fig:f3-flow}
+\evidimg{f3_nifi_provenance.png}{Provenance of \textit{Publish Air Quality to Kafka}}{fig:f3-prov}
+\evidlog{f3_kafka_air_quality.txt}{Messages in Kafka topic \texttt{air\_quality}}{fig:f3-kafka}
+
+\subsection*{F4 - Raw snapshots in HDFS}
+\evidlog{f4_hdfs_raw.txt}{Latest raw snapshots in HDFS and a sample weather snapshot}{fig:f4-raw}
+\evidimg{f4_hdfs_browser.png}{Raw GPS snapshots in the HDFS file browser}{fig:f4-browser}
+
+\subsection*{F5 - GTFS}
+\evidimg{f5_nifi_gtfs.png}{GTFS Ingestion flow in NiFi}{fig:f5-nifi}
+\evidlog{f5_hdfs_gtfs.txt}{GTFS archives in HDFS Raw}{fig:f5-hdfs}
+
+\subsection*{F6 - Batch cleaning}
+\evidlog{f6_batch_cleaned.txt}{Batch scheduler log and cleaned Parquet datasets}{fig:f6-batch}
+
+\subsection*{F7 - Enrichment}
+\evidlog{f7_hdfs_enriched.txt}{Enriched datasets in HDFS}{fig:f7-hdfs}
+\evidlog{f7_show_sample_short.txt}{Enriched datasets: row counts and the first record of each table}{fig:f7-sample}
+
+\subsection*{Q1 - Unit tests}
+\evidlog{q1_pytest.txt}{Unit test results}{fig:q1-pytest}
+
+\subsection*{Q2 - GPS-GTFS consistency}
+\evidlog{q2_profile_short.txt}{GPS-GTFS \texttt{trip\_id} match per service date}{fig:q2-profile}
+
+\end{document}

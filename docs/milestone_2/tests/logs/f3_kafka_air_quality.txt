@@ -1,0 +1,8 @@
+Warszawa-Grochowska:PM25	{"param_code":"PM25","param_name":"pył zawieszony PM2.5","value":2.1437,"time":"2026-11-22 22:22:30","unit":"µg/m3","name":"Warszawa-Grochowska","lon":21.080555,"lat":52.245703,"ingested_at":"2026-11-22T21:37:30.259Z"}
+Warszawa-Grochowska:CO	{"param_code":"CO","param_name":"tlenek węgla","value":-0.116841,"time":"2026-11-22 22:22:30","unit":"mg/m3","name":"Warszawa-Grochowska","lon":21.080555,"lat":52.245703,"ingested_at":"2026-11-22T21:37:30.259Z"}
+Warszawa, Al. Niepodległości:PM10	{"param_code":"PM10","param_name":"pył zawieszony PM10","value":12.3,"time":"2026-11-22 22:22:30","unit":"µg/m3","ingested_at":"2026-11-22T21:37:30.259Z","name":"Warszawa, Al. Niepodległości","lon":21.004724,"lat":52.219298}
+Warszawa, ul. Wokalna:O3	{"param_code":"O3","param_name":"ozon","value":35.4,"time":"2026-11-22 22:22:30","unit":"µg/m3","lon":21.033819,"ingested_at":"2026-11-22T21:37:30.259Z","name":"Warszawa, ul. Wokalna","lat":52.160772}
+Warszawa, ul. Wokalna:PM10	{"param_code":"PM10","param_name":"pył zawieszony PM10","value":9.2,"time":"2026-11-22 22:22:30","unit":"µg/m3","lon":21.033819,"ingested_at":"2026-11-22T21:37:30.259Z","name":"Warszawa, ul. Wokalna","lat":52.160772}
+
+### The record from the NiFi provenance screenshot, found in Kafka (partition/offset):
+Partition:2	Offset:5739304	{"param_code":"H","param_name":"Wilgotność","value":84.16,"time":"2026-11-22 22:00:00","unit":"%","lat":52.1320431,"name":"Warszawa-12792","lon":21.127464,"ingested_at":"2026-11-22T21:15:00.797Z"}

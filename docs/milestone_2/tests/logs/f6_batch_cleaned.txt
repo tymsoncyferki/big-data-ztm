@@ -1,0 +1,40 @@
+### scheduler log (last cycle)
+batch-scheduler-1  | [2026-11-22T22:00:00+01:00] Starting batch: dataset=all
+batch-scheduler-1  | 2026-11-22 22:01:31,735 INFO gps: 37932 valid new records, affected dates: ['2026-11-22']
+batch-scheduler-1  | 2026-11-22 22:02:02,095 INFO gps: completed successfully in 117.4s
+batch-scheduler-1  | 2026-11-22 22:02:27,160 INFO weather: 480 valid new records, affected dates: ['2026-11-22']
+batch-scheduler-1  | 2026-11-22 22:02:28,489 INFO weather: completed successfully in 26.3s
+batch-scheduler-1  | 2026-11-22 22:02:52,510 INFO air_quality: 23932 valid new records, affected dates: ['2026-11-22']
+batch-scheduler-1  | 2026-11-22 22:03:06,428 INFO air_quality: completed successfully in 37.9s
+batch-scheduler-1  | [2026-11-22T22:03:08+01:00] Batch finished successfully.
+batch-scheduler-1  | [2026-11-22T22:15:00+01:00] Starting batch: dataset=all
+batch-scheduler-1  | 2026-11-22 22:16:32,052 INFO gps: 36042 valid new records, affected dates: ['2026-11-22']
+batch-scheduler-1  | 2026-11-22 22:16:59,836 INFO gps: completed successfully in 114.9s
+batch-scheduler-1  | 2026-11-22 22:17:26,592 INFO weather: 480 valid new records, affected dates: ['2026-11-22']
+batch-scheduler-1  | 2026-11-22 22:17:28,174 INFO weather: completed successfully in 28.3s
+batch-scheduler-1  | 2026-11-22 22:17:52,128 INFO air_quality: 23160 valid new records, affected dates: ['2026-11-22']
+batch-scheduler-1  | 2026-11-22 22:18:04,088 INFO air_quality: completed successfully in 35.9s
+batch-scheduler-1  | [2026-11-22T22:18:06+01:00] Batch finished successfully.
+### cleaned datasets
+13.6 M   40.7 M   /data/cleaned/_pipeline_state
+90.2 M   270.5 M  /data/cleaned/air_quality_observations
+744.7 M  2.2 G    /data/cleaned/gps_observations
+14.6 K   43.9 K   /data/cleaned/gtfs_agency
+18.1 K   54.4 K   /data/cleaned/gtfs_attributions
+10.0 K   30.1 K   /data/cleaned/gtfs_calendar_dates
+19.4 K   58.2 K   /data/cleaned/gtfs_fare_attributes
+136.5 K  409.6 K  /data/cleaned/gtfs_fare_rules
+14.1 K   42.3 K   /data/cleaned/gtfs_feed_info
+28.7 K   86.0 K   /data/cleaned/gtfs_frequencies
+76.1 K   228.2 K  /data/cleaned/gtfs_routes
+103.2 M  309.6 M  /data/cleaned/gtfs_shapes
+439.0 M  1.3 G    /data/cleaned/gtfs_stop_times
+1.8 M    5.4 M    /data/cleaned/gtfs_stops
+27.1 M   81.3 M   /data/cleaned/gtfs_trips
+5.4 M    16.1 M   /data/cleaned/weather_observations
+drwxr-xr-x   - spark supergroup          0 2026-11-21 01:31 /data/cleaned/gps_observations/date=2026-11-20
+drwxr-xr-x   - spark supergroup          0 2026-11-22 01:31 /data/cleaned/gps_observations/date=2026-11-21
+drwxr-xr-x   - spark supergroup          0 2026-11-22 22:16 /data/cleaned/gps_observations/date=2026-11-22
+-rw-r--r--   3 spark supergroup   18748100 2026-11-22 22:16 /data/cleaned/gps_observations/date=2026-11-22/part-00001-7f619fa1-27d2-4109-b5f9-0ff83d7043fd-c000.snappy.parquet
+-rw-r--r--   3 spark supergroup   18791932 2026-11-22 22:16 /data/cleaned/gps_observations/date=2026-11-22/part-00002-7f619fa1-27d2-4109-b5f9-0ff83d7043fd-c000.snappy.parquet
+-rw-r--r--   3 spark supergroup   18868202 2026-11-22 22:16 /data/cleaned/gps_observations/date=2026-11-22/part-00003-7f619fa1-27d2-4109-b5f9-0ff83d7043fd-c000.snappy.parquet

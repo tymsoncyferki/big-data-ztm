@@ -1,0 +1,14 @@
+drwxr-xr-x   - nifi supergroup          0 2026-11-15 21:19 /data/raw/gtfs/date=2026-11-15
+-rw-r--r--   1 nifi supergroup  102608856 2026-11-15 21:19 /data/raw/gtfs/date=2026-11-15/warsaw_20261115_211909_06519642-aba9-4e9b-8178-7311a2d4b99d.zip
+drwxr-xr-x   - nifi supergroup          0 2026-11-16 02:35 /data/raw/gtfs/date=2026-11-16
+-rw-r--r--   1 nifi supergroup  106733424 2026-11-16 02:35 /data/raw/gtfs/date=2026-11-16/warsaw_20261116_023547_b893dc99-f449-41e9-b1a2-66e83bdaff82.zip
+drwxr-xr-x   - nifi supergroup          0 2026-11-18 03:24 /data/raw/gtfs/date=2026-11-18
+-rw-r--r--   1 nifi supergroup  107241077 2026-11-18 03:24 /data/raw/gtfs/date=2026-11-18/warsaw_20261118_032441_9c0f264d-9ea8-4244-af8e-de44f68bc32c.zip
+drwxr-xr-x   - nifi supergroup          0 2026-11-19 02:53 /data/raw/gtfs/date=2026-11-19
+-rw-r--r--   1 nifi supergroup  107620841 2026-11-19 02:53 /data/raw/gtfs/date=2026-11-19/warsaw_20261119_025352_9b8c134b-0970-4f8d-8511-79015c16a5f7.zip
+drwxr-xr-x   - nifi supergroup          0 2026-11-20 03:00 /data/raw/gtfs/date=2026-11-20
+-rw-r--r--   1 nifi supergroup  103761596 2026-11-20 03:00 /data/raw/gtfs/date=2026-11-20/warsaw_20261120_030026_1a366e88-6d36-4a0e-b414-b26baf2fbba5.zip
+drwxr-xr-x   - nifi supergroup          0 2026-11-21 03:00 /data/raw/gtfs/date=2026-11-21
+-rw-r--r--   1 nifi supergroup  103761596 2026-11-21 03:00 /data/raw/gtfs/date=2026-11-21/warsaw_20261121_030005_22aae1fb-479b-4db0-908f-26c6381623ad.zip
+drwxr-xr-x   - nifi supergroup          0 2026-11-22 03:00 /data/raw/gtfs/date=2026-11-22
+-rw-r--r--   1 nifi supergroup  103098439 2026-11-22 03:00 /data/raw/gtfs/date=2026-11-22/warsaw_20261122_030005_db161da6-f791-4e90-9589-cd7e5b913570.zip
