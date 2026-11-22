@@ -65,6 +65,7 @@
 The main business and technical assumptions presented in PM1 remain unchanged. However, three modifications were introduced during implementation:
 
 \subsection{Data Sources}
+\label{sec:updates-data-sources}
 
 GPS and GTFS data sources were changed from the Warsaw Open Data API to MKURAN. Unlike the original API, MKURAN provides \texttt{trip\_id} and \texttt{service\_date} alongside GPS observations, as well as ready-to-use GTFS files. This simplifies matching vehicle positions to scheduled trips and calculating delays, as identifying the correct trip for each vehicle independently would require a complex matching process based on location, time, and timetable data.
 
@@ -315,28 +316,233 @@ Figures~\ref{fig:bp_passenger} and~\ref{fig:bp_dispatcher} show the two core bus
 
 % \textbf{Transport planners and analysts} will get access to historical data that is already cleaned and combined with weather data. This makes it possible to find lines and stops which are regularly late or which are especially affected by bad weather, and to use this knowledge when planning timetables, for example by adding extra time on some routes during winter.
 
-\section{Datasources}
-Data used in the project will be obtained from data published by the city of Warsaw through its open data APIs, available at
-(\texttt{https://dane.um.warszawa.pl}), but with multiple endpoints of both streaming and batch nature. Polled data is returned in json format for all endpoints available. All data size estimations were acquired using models available in Gemini free tier.
-\subsection{Streaming data}
-\begin{itemize}
+\section{Description of Datasets}
+\label{sec:data-sets}
 
-  \item \textbf{Vehicle position data} - live GPS
-    pings for every active vehicle: \texttt{Lat}, \texttt{Lon}, \texttt{Time},
-    \texttt{Lines}, \texttt{Brigade}, \texttt{VehicleNumber}. During rush hour there are about 450 trams and 1400 buses deployed, and such information is refreshed every 10s, though we would probably poll it in larger intervals, in order not to overload our limited infrastructure and not to exceed potential rate-limiting. A result of single poll has estimated size of 200KB.
-  \item \textbf{Weather data} - air and surface temperature,
-    precipitation, humidity, wind, and visibility for 18 stations located throughout the city. This data is refreshed every 10 minutes. A result of a single poll is estimated size of 4KB.
-     \item \textbf{Air quality data} - returns a json with short description, monitoring station parameters, including type and location, and air quality parameters in form of nested records for 108 stations located throughout the city. This data is refreshed every 10 minutes. A result of a single poll is estimated size of 120KB.
-\end{itemize}
-\subsection{Batch data}
-\begin{itemize}
-  \item  \textbf{Timetable data} (static data, which should be acquired once per day) -
-    stop locations, line-stop assignments, and per-brigade precise schedules
-    for every  stop-line-brigade combination in the network. This data daily (assuming daily batches) estimated size is at 140-200MB.
-\end{itemize}
-\subsection{Data Challenges}
-Weather and air quality measurements are updated only every 10 minutes, which is too infrequent to treat them as continuous streaming data sources. In contrast, vehicle GPS positions are updated approximately every 10 seconds.
-To address this limitation, we plan to simulate continuous environmental data streams by interpolating measurements within 10-minute intervals. GPS observations will be buffered for the same period to keep the data streams synchronised.
+This section describes the data sets used in the project: three streams
+(vehicle positions, weather and air quality) and one batch data set
+(the GTFS timetable). All numbers were computed with Spark on the data
+stored in HDFS, collected between 15 and 22 November 2026.
+
+Because of hardware problems and restarts of our infrastructure, data is
+available for about 152 of the 165 hours of this period. For this reason
+daily averages were computed only on days with complete data
+(18, 19 and 20 November).
+% We analyze two variants of data: raw records (as received) and cleaned records (after validation and deduplication).
+
+
+% \begin{table}[H]
+% \centering
+% \small
+% \caption{Summary of the collected data sets (15-22 November 2026).}
+% \label{tab:datasets-summary}
+% \begin{tabular}{|>{\raggedright\arraybackslash}p{2.6cm}|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}p{2.5cm}|}
+% \hline
+% & \textbf{GPS} & \textbf{Weather} & \textbf{Air quality} & \textbf{GTFS} \\ \hline
+% Category & positions of buses and trams & meteorological measurements & air pollution and sensor measurements & static timetable \\ \hline
+% Source format & JSON & JSON & JSON (nested) & ZIP of CSV files \\ \hline
+% Snapshots & every 10\,s (8\,619/day) & every 30\,s (2\,880/day) & every 30\,s (2\,880/day) & once a day \\ \hline
+% Records per snapshot & 812 (100--1\,082) & 16 & 773 & 7.8\,M stop times \\ \hline
+% Cleaned rows per day & $\approx$5.15\,M & 46\,080 & $\approx$2.22\,M & -- \\ \hline
+% Raw volume per day & $\approx$2.46\,GB & $\approx$10\,MB & $\approx$400\,MB & $\approx$105\,MB \\ \hline
+% Total raw / cleaned & 13.6\,GB / 0.76\,GB & 63\,MB / 5.5\,MB & 2.48\,GB / 92\,MB & 735\,MB (7 ZIPs) \\ \hline
+% Cleaned rows in total & 29.2\,M & 284\,624 & 13.7\,M & -- \\ \hline
+% \end{tabular}
+% \end{table}
+
+% Within the 165 hours of the collection period data is available in around 152/153 hours.
+% The missing hours were caused by restarts of our own infrastructure and not by the data providers.
+
+\subsection{Vehicle positions (GPS)}
+
+Vehicle positions are the main data source of the project.
+Every snapshot contains the current position of every bus and tram in Warsaw together with the GTFS trip it serves,
+so each position can be matched with the timetable.
+The data is published by Mikołaj Kuranowski on mkuran.pl and is built from the official ZTM data.
+
+\begin{table}[H]
+\centering
+\caption{Vehicle positions data set.}\label{tab:ds-gps}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3cm}|>{\raggedright\arraybackslash}p{11cm}|}
+\hline
+\textbf{Property} & \textbf{Description} \\
+\hline
+Data category & Live GPS positions of buses and trams in Warsaw \\ \hline
+Source & \texttt{https://mkuran.pl/gtfs/warsaw/positions.json} \\ \hline
+Source format & JSON \\ \hline
+Inflow frequency & Polled every 10 s (about 8600 snapshots per day) \\ \hline
+Number of records & On average 812 vehicles per snapshot (about 110 at night, 1070 during the day), about 5.15 million rows per day after cleaning \\ \hline
+Volume & About 285 KB per snapshot, 2.46 GB of raw JSON per day \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Structure of a GPS record.}\label{tab:fields-gps}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3.6cm}|>{\raggedright\arraybackslash}p{2cm}|>{\raggedright\arraybackslash}p{8cm}|}
+\hline
+\textbf{Field name} & \textbf{Type} & \textbf{Description} \\
+\hline
+id & String & Unique id of the record \\ \hline
+trip\_id & String & GTFS trip served by the vehicle. Used to get the line number and vehicle type from GTFS \\ \hline
+side\_number & String & Vehicle (fleet) number \\ \hline
+service\_date & String & GTFS service day (YYYYMMDD) \\ \hline
+timestamp & Timestamp & Time of the GPS fix (ISO 8601 with time zone offset) \\ \hline
+lat, lon & Number & Position of the vehicle (WGS84) \\ \hline
+bearing & Number & Direction of movement in degrees (-180 to 180, changed to 0-360 in cleaning) \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent\textbf{Data quality assessment:}
+The data is complete, only \texttt{bearing} is missing in 3.4\% of records. All trip ids were found in GTFS, so every position can be matched with the timetable.
+It turned out that about half of the raw records are duplicates - this could mean that we ask the API more often than the data changes. 
+Duplicates are removed in cleaning. About 3\% of consecutive positions give a speed above 120 km/h (GPS jumps), so they are filtered out when computing speed features.
+
+\subsection{Weather}
+
+Weather data comes from the city weather stations, which measure air and road temperature, humidity, wind and precipitation.
+The measurements are updated only about every 10 minutes, which is too rare to treat them as a real stream.
+Because of that the simulator interpolates the values between two measurements and sends a new snapshot every 30 s.
+GPS data is buffered for 15 minutes, so that all streams stay synchronised.
+
+\begin{table}[H]
+\centering
+\caption{Weather data set.}\label{tab:ds-weather}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3cm}|>{\raggedright\arraybackslash}p{11cm}|}
+\hline
+\textbf{Property} & \textbf{Description} \\
+\hline
+Data category & Weather measurements from city weather stations in Warsaw \\ \hline
+Source & Warsaw open data API (\texttt{dane.um.warszawa.pl}) \\ \hline
+Source format & JSON \\ \hline
+Inflow frequency & Values change about every 10 minutes, the simulator sends an interpolated snapshot every 30 s (2880 per day) \\ \hline
+Number of records & 16 stations per snapshot, 46080 rows per day \\ \hline
+Volume & About 3.5 KB per snapshot, 10 MB of raw JSON per day \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Structure of a weather record.}\label{tab:fields-weather}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3.6cm}|>{\raggedright\arraybackslash}p{2cm}|>{\raggedright\arraybackslash}p{8cm}|}
+\hline
+\textbf{Field name} & \textbf{Type} & \textbf{Description} \\
+\hline
+lokalizacja & String & Name of the weather station \\ \hline
+lat, lon & Number & Position of the station \\ \hline
+czas & Timestamp & Time of the measurement (local time, changed to UTC in cleaning) \\ \hline
+temp\_pow & Number & Air temperature (C) \\ \hline
+temp\_naw & Number & Road surface temperature (C) \\ \hline
+wilg\_pow & Number & Relative air humidity (\%) \\ \hline
+pred\_wiatru & Number & Wind speed \\ \hline
+kier\_wiatru & Number & Wind direction (degrees) \\ \hline
+int\_opadu & Number & Precipitation intensity \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent\textbf{Data quality assessment:}
+All 16 stations are present in every snapshot and no record was rejected in cleaning. The provider marks missing values as -32000 (at most 0.19\% of rows per field), so we treat values outside simple ranges as missing. The main limitation is that there are only 16 stations for the whole city and values change every 10 minutes, so we interpolate them in time and give each vehicle the values from the nearest station.
+
+\subsection{Air quality}
+
+Air quality data comes from monitoring stations in Warsaw.
+Most of them are low-cost sensors measuring particulate matter and NO2,
+many of them also measure temperature, humidity and pressure.
+Same as weather, the values are updated about every 10 minutes,
+so they are interpolated by the simulator and sent every 30 s together with the other streams.
+
+\begin{table}[H]
+\centering
+\caption{Air quality data set.}\label{tab:ds-air}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3cm}|>{\raggedright\arraybackslash}p{11cm}|}
+\hline
+\textbf{Property} & \textbf{Description} \\
+\hline
+Data category & Air pollution and sensor measurements from monitoring stations in Warsaw \\ \hline
+Source & Warsaw open data API (\texttt{dane.um.warszawa.pl}) \\ \hline
+Source format & JSON (nested, list of measurements for each station) \\ \hline
+Inflow frequency & Same as weather, snapshot every 30 s (2880 per day) \\ \hline
+Number of records & 113 stations and 773 measurements per snapshot, about 2.22 million rows per day \\ \hline
+Volume & About 139 KB per snapshot, 400 MB of raw JSON per day \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Structure of an air quality record.}\label{tab:fields-air}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3.6cm}|>{\raggedright\arraybackslash}p{2cm}|>{\raggedright\arraybackslash}p{8cm}|}
+\hline
+\textbf{Field name} & \textbf{Type} & \textbf{Description} \\
+\hline
+name & String & Name of the station \\ \hline
+lat, lon & Number & Position of the station \\ \hline
+address & Object & Address of the station (used to keep only stations in Warsaw) \\ \hline
+data & Array & List of measurements of the station, fields below are for one element \\ \hline
+param\_code & String & Code of the parameter, e.g. PM10, PM2.5, NO2, T (temperature), H (humidity), P (pressure) \\ \hline
+param\_name & String & Full name of the parameter \\ \hline
+value & Number & Measured value \\ \hline
+unit & String & Unit of the value, e.g. ug/m3 \\ \hline
+time & Timestamp & Time of the measurement (local time, changed to UTC in cleaning) \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent\textbf{Data quality assessment:}
+Every snapshot has the same 113 stations and only 0.13\% of records are rejected because of a negative value. PM, NO2, temperature, humidity and pressure are measured by over 100 stations, but O3, CO, benzene and SO2 only by 1 to 9 stations, so they are not very useful as features. There are also some inconsistencies at the source: PM2.5 comes under two codes (PM2.5 and PM25) and the CO values of the two stations differ a lot, probably because of a wrong unit.
+
+\subsection{Timetable (GTFS)}
+
+The GTFS feed is the static timetable of Warsaw public transport.
+It is needed to compute delays, because planned times from the timetable are compared with the real positions of vehicles.
+The feed is downloaded once a day, because the timetable changes often.
+
+\begin{table}[H]
+\centering
+\caption{Timetable (GTFS) data set.}\label{tab:ds-gtfs}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3cm}|>{\raggedright\arraybackslash}p{11cm}|}
+\hline
+\textbf{Property} & \textbf{Description} \\
+\hline
+Data category & Static timetable of Warsaw public transport \\ \hline
+Source & \texttt{https://mkuran.pl/gtfs/warsaw.zip} \\ \hline
+Source format & ZIP archive with CSV files (GTFS standard) \\ \hline
+Inflow frequency & Downloaded once a day \\ \hline
+Number of records & 324 routes, 7304 stops, 272002 trips, 7771522 stop times (feed from 22 November) \\ \hline
+Volume & About 105 MB per archive \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Main fields of the GTFS tables used in the project.}\label{tab:fields-gtfs}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3.6cm}|>{\raggedright\arraybackslash}p{2cm}|>{\raggedright\arraybackslash}p{8cm}|}
+\hline
+\textbf{Field name} & \textbf{Type} & \textbf{Description} \\
+\hline
+route\_id & String & Id of the route \\ \hline
+route\_short\_name & String & Line number shown to passengers, e.g. 175 \\ \hline
+route\_type & Integer & Type of vehicle (0 tram, 1 metro, 2 rail, 3 bus) \\ \hline
+trip\_id & String & Id of the trip, the same as in the GPS data \\ \hline
+route\_id & String & Route of the trip \\ \hline
+service\_id & String & Days on which the trip runs (see calendar\_dates) \\ \hline
+direction\_id & Integer & Direction of the trip (0 or 1) \\ \hline
+stop\_id & String & Id of the stop \\ \hline
+stop\_name & String & Name of the stop \\ \hline
+stop\_lat, stop\_lon & Number & Position of the stop \\ \hline
+trip\_id & String & Trip that the stop time belongs to \\ \hline
+stop\_sequence & Integer & Order of the stop in the trip \\ \hline
+stop\_id & String & Stop \\ \hline
+arrival\_time, departure\_time & String & Planned times (HH:MM:SS, can be after 24:00 for night services) \\ \hline
+service\_id & String & Id of the service \\ \hline
+date & String & Date (YYYYMMDD) \\ \hline
+exception\_type & Integer & 1 if the service runs on this date, 2 if not \\ \hline
+\end{tabular}
+\end{table}
+
+\noindent\textbf{Data quality assessment:}
+The GTFS data is complete and well structured, but it changes almost every day (6 out of 7 downloaded feeds are different),
+so we always use the feed that was valid on the day of the observation. 
+About 3\% of stop times are later than 24:00, which is normal in GTFS for night services, so we convert them to seconds from the start of the service day.
+The feed from 17 November is missing because of our infrastructure outage, in that case the previous feed is used since it covers the next month anyway.
 
 
 \section{Data Processing Steps}
