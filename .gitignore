@@ -43,3 +43,5 @@ dist/
 /local
 CLAUDE.md
 *:Zone.Identifier
+commands.md
+check_gps_refresh.py

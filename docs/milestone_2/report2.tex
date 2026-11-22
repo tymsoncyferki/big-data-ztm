@@ -790,114 +790,25 @@ AI will serve as a supporting tool rather than a replacement for the team's own 
 
 \section{Division of Responsibilities}
 
+Table~\ref{tab:responsibilities} shows the work done by each team member in this milestone.
+
 \begin{table}[H]
 \centering
 \small
-\caption{Distribution of responsibilities among team members}
-\label{tab:responsibilities}
-\begin{tabular}{>{\raggedright\arraybackslash}p{7.2cm} c c c c}
-\toprule
-\textbf{Responsibility} & \textbf{Emil} & \textbf{Michał} & \textbf{Sebastian} & \textbf{Tymoteusz} \\
-\midrule
-1. API access, Python stream simulation and Apache NiFi ingestion
-   &  & \mainresp & \suppresp &  \\
-2. Kafka topics and data validation
-   &  & \mainresp & \suppresp &  \\
-3. Data schemas and interfaces (HDFS paths, Kafka topics, Cassandra tables)
-   & \suppresp & \suppresp & \mainresp & \suppresp \\
-4. HDFS, directory structure and data cleaning (Parquet)
-   & \mainresp & \suppresp &  &  \\
-5. Delay estimation and feature definitions shared by batch and stream paths
-   & \mainresp &  &  & \suppresp \\
-6. Batch processing: unified dataset, historical statistics and weather-sensitivity ranking
-   & \mainresp & \suppresp &  &  \\
-7. ML model training, evaluation and saving the model in HDFS
-   & \mainresp &  &  & \suppresp \\
-8. Spark Structured Streaming: Kafka consumption, enrichment, live delays and predictions
-   & \suppresp &  &  & \mainresp \\
-9. Live delays and predictions
-   & \suppresp &  &  & \mainresp \\
-10. Cassandra tables and writing/exporting results from batch and stream processing
-   & \suppresp &  & \mainresp & \suppresp \\
-11. Streamlit dashboard (map, alerts, weather impact analysis, model quality)
-   &  &  & \mainresp & \suppresp \\
-12. Docker Compose integration, system testing and run documentation
-   & \suppresp & \suppresp & \mainresp & \suppresp \\
-\bottomrule
+\caption{Work done by team members in Milestone 2.}\label{tab:responsibilities}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{2.2cm}|>{\raggedright\arraybackslash}p{6.6cm}|>{\raggedright\arraybackslash}p{4.6cm}|}
+\hline
+\textbf{Team member} & \textbf{Code} & \textbf{Report and tests} \\
+\hline
+Emil Łasocha & ML stage: estimating delays at stops from GPS and GTFS, building the ML data set with features and target, automatic refresh in the batch pipeline, table of scheduled stops for the stream path, unit tests & ML data set and Analytical Approach sections \\
+\hline
+Michał Szewczak & - & Conceptual Data Model \\
+\hline
+Sebastian Trojan & Python source simulator, NiFi ingestion flows, Kafka and HDFS setup in Docker Compose, Spark batch cleaning (Raw to Cleaned), GTFS processing and the first enriched data set, removal of Hive, data contracts documentation & Updates to PM1 Report, Data Acquisition and Transformation and System Architecture sections, updated architecture diagram \\
+\hline
+Tymoteusz Urban & Running and monitoring the data collection (healthcheck alerts, memory limits, NiFi reset script, log analysis scripts, recovery instructions), fixes in data cleaning, building the ML data set day by day, scripts describing the data sources & Description of Datasets section, test documentation, corrections of the whole report \\
+\hline
 \end{tabular}
-
-\vspace{2mm}
-\footnotesize
-{\Large$\checkmark$} -- main responsible person, \quad {\footnotesize$\checkmark$} -- supporting team member
 \end{table}
-
-The project work is divided among four team members, each responsible for a specific component of the system and supported by another team member.
-
-\subsection{Data Ingestion and Validation}
-
-\textbf{Main responsible person:} Michał, \textbf{supporting team member:} Sebastian.
-
-\begin{itemize}
-    \item Selecting and testing data sources for vehicle positions and timetables (mkuran.pl) and for weather and air quality (Warsaw open data API).
-    \item Creating scripts in order to retrieve data from external APIs.
-    \item Implementing a Python simulation module for 15-minute GPS buffering and interpolation of weather and air quality measurements.
-    \item Configuring Apache NiFi to automate the data ingestion process, including daily retrieval of timetables.
-    \item Storing raw copies of all collected data in HDFS (Raw layer).
-    \item Configuring Apache Kafka topics, such as \texttt{gps}, \texttt{weather} and \texttt{air\_quality}.
-    \item Implementing data validation, error handling and duplicate detection.
-    \item Defining and documenting data schemas.
-    \item Documenting the data collection process.
-\end{itemize}
-\textbf{Expected outcome:} A working data ingestion pipeline that retrieves and validates data, archives raw data in HDFS and delivers live data to Apache Kafka, with a separate Python module for buffering GPS observations and interpolating weather and air quality measurements.
-
-\subsection{Data Storage and Batch Processing}
-
-\textbf{Main responsible person:} Emil, \textbf{supporting team member:} Michał.
-
-\begin{itemize}
-    \item Configuring Apache Hadoop and HDFS.
-    \item Designing a directory structure for raw, cleaned and enriched data, timetable snapshots and trained models.
-    \item Cleaning the collected data and handling missing or invalid values, and saving it in Parquet format.
-    \item Estimating historical delays of buses and trams by comparing GPS positions with timetables, using delay logic shared with the stream path.
-    \item Combining GPS, timetable, weather and air quality data into a unified dataset, including features for machine learning, with feature definitions shared with the stream path.
-    \item Implementing batch processing jobs using Apache Spark.
-    \item Calculating historical statistics, such as average delays of buses and trams by line, stop, hour, day of the week and weather conditions, including a ranking of weather-sensitive lines and stops.
-    \item Training a Spark MLlib model that predicts delays of buses and trams, using the enriched dataset.
-    \item Evaluating the model with metrics and saving the trained model in HDFS for the stream path.
-    \item Publishing the latest timetable snapshot in HDFS for the stream path.
-    \item Exporting historical aggregates and model evaluation metrics to Cassandra.
-\end{itemize}
-\textbf{Expected outcome:} A functional data storage layer, a unified dataset with estimated delays and features, a repeatable batch processing pipeline for historical analysis, a trained and evaluated prediction model, and aggregates, metrics, model and timetable snapshot delivered to the serving and stream layers.
-
-\subsection{Stream Processing and Prediction}
-
-\textbf{Main responsible person:} Tymoteusz, \textbf{supporting team member:} Emil.
-
-\begin{itemize}
-    \item Configuring Apache Spark Structured Streaming.
-    \item Implementing the consumption of events from Apache Kafka.
-    \item Enriching live observations with the latest weather and air quality data and the timetable snapshot from the batch layer.
-    \item Calculating real-time metrics and statistics using streaming data, including current delays, with the same delay definition as in the batch path.
-    \item Preparing features from weather, air quality and public transport data, identical to the features used for model training.
-    \item Loading the trained model from HDFS and integrating it into the streaming pipeline to generate delay predictions for buses and trams.
-    \item Writing current vehicle states, environmental data and predictions to Cassandra.
-\end{itemize}
-\textbf{Expected outcome:} A working stream processing pipeline capable of calculating real-time metrics and generating bus and tram delay predictions using the model trained in the batch layer.
-
-\subsection{Results Serving, Dashboard, and System Integration}
-
-\textbf{Main responsible person:} Sebastian, \textbf{supporting team member:} Tymoteusz.
-
-\begin{itemize}
-    \item Configuring Apache Cassandra and creating tables for current data, predictions, historical aggregates and model metrics.
-    \item Defining common data formats and interfaces.
-    \item Integrating the results of batch and stream processing.
-    \item Developing an interactive dashboard using Streamlit, reading data from Cassandra.
-    \item Visualising a map of vehicle delays, weather and air quality conditions, bus and tram delays, historical statistics, weather impact analysis, and machine learning predictions.
-    \item Integrating system components using Docker Compose.
-    \item Testing the overall system and resolving integration issues.
-    \item Preparing instructions for setting up and running the complete system.
-\end{itemize}
-\textbf{Expected outcome:} A functional dashboard presenting the results of the project, an integrated system running in Docker Compose, and documentation explaining how to run the application.
 
 \end{document}
