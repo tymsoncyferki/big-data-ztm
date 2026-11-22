@@ -614,7 +614,7 @@ missing pings) also have no target and are not used for training. Movement, weat
 
 \subsection{Data Sources and Acquisition}
 
-The system uses GPS positions and GTFS timetables from MKURAN, together with weather and air quality measurements from Warsaw Open Data. Python collects the GPS and environmental data, while Apache NiFi downloads the GTFS ZIP archive separately.
+The system uses GPS positions and GTFS timetables from mkuran.pl, together with weather and air quality measurements from Warsaw Open Data. Python collects the GPS and environmental data, while Apache NiFi downloads the GTFS ZIP archive separately.
 
 \subsection{Python Simulation and Synchronisation}
 
@@ -629,7 +629,7 @@ The Python application fetches GPS snapshots every 10 seconds and polls the weat
 \paragraph{GPS, weather and air quality.}
 The simulator sends GPS, weather and air quality snapshots to three separate \texttt{ListenHTTP} endpoints in NiFi. Each flow uses \texttt{SplitJson} to separate the original snapshot from the individual records. The original JSON is assigned a UTC archive date, hour and filename by \texttt{UpdateAttribute}, then saved without modification to HDFS Raw using \texttt{PutHDFS}. The individual records follow separate processing paths according to their source:
 
-\begin{itemize}
+\begin{itemize}\sloppy
     \item \textbf{GPS.} \texttt{SplitJson} extracts individual positions from the \texttt{positions} array. \texttt{ValidateJson} checks each position, and \texttt{EvaluateJsonPath} extracts its trip ID, vehicle side number and timestamp. \texttt{DetectDuplicate} rejects repeated combinations of these fields. Finally, \texttt{UpdateAttribute} sets the ingestion time, \texttt{JoltTransformJSON} adds it to the JSON, and \texttt{PublishKafka} sends the event to the \texttt{gps} topic.
     \item \textbf{Weather.} \texttt{SplitJson} extracts station observations from the \texttt{stations} array. Each observation is validated and its station identifier and measurement timestamp are extracted. \texttt{DetectDuplicate} removes repeated observations for the same station and time. \texttt{UpdateAttribute} and \texttt{JoltTransformJSON} add the ingestion time, and \texttt{PublishKafka} sends the result to the \texttt{weather} topic.
     \item \textbf{Air quality.} NiFi first splits the snapshot into stations and validates each station record. It extracts station information, then uses another \texttt{SplitJson} processor to separate the pollutant measurements within that station. Each measurement is identified by station, pollutant code and timestamp, allowing \texttt{DetectDuplicate} to remove repeated values. \texttt{JoltTransformJSON} adds the station details and ingestion timestamp before the event is sent to the \texttt{air\_quality} topic.
@@ -638,7 +638,7 @@ The simulator sends GPS, weather and air quality snapshots to three separate \te
 For all three sources, invalid records, duplicates and processing failures are routed to logging or error paths rather than Kafka. The original snapshots remain available in HDFS Raw independently of these event-level checks.
 
 \paragraph{GTFS acquisition.}
-GTFS uses a separate scheduled NiFi flow. At 03:00 Warsaw time, \texttt{GenerateFlowFile} triggers \texttt{InvokeHTTP} to download the timetable ZIP archive from MKURAN. \texttt{UpdateAttribute} assigns the archive filename and date, and \texttt{PutHDFS} stores the ZIP in HDFS Raw. GTFS is not processed by the Python simulator or published to Kafka.
+GTFS uses a separate scheduled NiFi flow. At 03:00 Warsaw time, \texttt{GenerateFlowFile} triggers \texttt{InvokeHTTP} to download the timetable ZIP archive from mkuran.pl. \texttt{UpdateAttribute} assigns the archive filename and date, and \texttt{PutHDFS} stores the ZIP in HDFS Raw. GTFS is not processed by the Python simulator or published to Kafka.
 
 \subsection{Raw Storage and Kafka Topics}
 
@@ -766,7 +766,7 @@ All sources are delayed by 15 minutes by the simulator, so the stream shows the 
 
 \subsection{Presentation of results to end users}
 
-The results will be shown in a Streamlit dashboard for passengers, operators and analysts. Live panels read data from
+The results will be shown in a Streamlit dashboard for passengers, dispatchers and analysts. Live panels read data from
 Cassandra, historical panels read batch aggregates that are also exported to Cassandra. The dashboard will have:
 \begin{itemize}
   \item a map with vehicles coloured by their current delay, filters by line and stop, and current weather and air quality,
@@ -778,15 +778,11 @@ Cassandra, historical panels read batch aggregates that are also exported to Cas
 
 \section{Use of Artificial Intelligence}
 
-AI tools will be used throughout the project to support software development, technical problem-solving, and report preparation. Their use will focus on improving productivity and assisting the team while ensuring that \textbf{all generated content and code are reviewed and verified by the team members}. \\ \\
-The planned uses of AI include:
+In this milestone AI was used as follows:
 \begin{itemize}
-    \item \textbf{Code development and editing:} Using AI tools integrated into the IDE to assist with writing, editing and debugging the code.
-    \item \textbf{Technical support:} Using AI to clarify technical concepts, explain unfamiliar technologies, suggest implementation approaches, and assist in troubleshooting errors.
-    \item \textbf{Report writing and editing:} Using AI to help structure the report, improve clarity and readability, correct grammatical and linguistic errors, and refine technical descriptions.
-    \item \textbf{Verification of results:} Reviewing and testing AI-generated code, suggestions, and written content to ensure their correctness, relevance, and consistency with the actual project implementation.
+    \item Help with debugging the system and writing some of the scripts (bash, python, spark)
+    \item Structure and improve readability of the report, correct grammatical and linguistic errors, generate tables
 \end{itemize}
-AI will serve as a supporting tool rather than a replacement for the team's own work. All team members will remain responsible for understanding, validating, and maintaining the code and documentation they produce.
 
 \section{Division of Responsibilities}
 
