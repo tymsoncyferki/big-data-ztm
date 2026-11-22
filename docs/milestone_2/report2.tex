@@ -520,6 +520,35 @@ so we always use the feed that was valid on the day of the observation.
 About 3\% of stop times are later than 24:00, which is normal in GTFS for night services, so we convert them to seconds from the start of the service day.
 The feed from 17 November is missing because of our infrastructure outage, in that case the previous feed is used since it covers the next month anyway.
 
+\subsection{Conceptual Data Model}
+
+The conceptual data model of the system is presented in Figure~\ref{fig:conceptual-model}.
+It consists of four entities, one for each source data
+
+\begin{itemize}
+    \item \textbf{Vehicle Positions} -- live GPS positions of active buses and trams,
+    including line, brigade, vehicle number and timestamp.
+    \item \textbf{Timetables} -- scheduled stop times for each line, brigade and stop,
+    together with stop locations, obtained once per day.
+    \item \textbf{Weather Observations} -- meteorological conditions (temperature,
+    precipitation, humidity, wind, visibility) measured at stations across the city.
+    \item \textbf{Air Quality Observations} -- air quality parameters measured at
+    monitoring stations across the city.
+\end{itemize}
+
+Vehicle Positions is the central entity. It is associated with Timetables via trip id, stop and time, which allows the delay of a vehicle to be calculated. It is also
+associated with Weather Observations and Air Quality Observations via time and location,
+which allows delays to be related to the conditions in which they occurred. Timetables
+remain a separate entity because, unlike the other entities, they come from a daily batch
+source rather than a stream.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{conceputal_data_model.png}
+    \caption{Conceptual data model illustrating relationships between source datasets
+    using temporal and spatial associations.}
+    \label{fig:conceptual-model}
+\end{figure}
 
 \section{Data Processing Steps}
 
