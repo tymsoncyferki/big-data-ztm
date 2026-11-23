@@ -11,7 +11,7 @@ Collects, for GPS, weather, air quality and GTFS:
   * GTFS: feed versions, how often the content really changes, table sizes,
     validity range, routes by type.
 
-    bash scripts/describe-sources.sh [--raw-day 2026-11-20] [--detail-days 2] [--skip-raw]
+    bash scripts/analysis/describe-sources.sh [--raw-day 2026-11-20] [--detail-days 2] [--skip-raw]
 
 Prints one JSON document on stdout (logs go to stderr).
 """

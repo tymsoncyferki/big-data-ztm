@@ -1,7 +1,7 @@
 """Print a few rows of an enriched table in readable form (read-only).
-    bash scripts/show-sample.sh ml_dataset 5
-    bash scripts/show-sample.sh ml_dataset 5 --route 175
-    bash scripts/show-sample.sh schedule_stops 5
+    bash scripts/analysis/show-sample.sh ml_dataset 5
+    bash scripts/analysis/show-sample.sh ml_dataset 5 --route 175
+    bash scripts/analysis/show-sample.sh schedule_stops 5
 """
 from __future__ import annotations
 

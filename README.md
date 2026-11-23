@@ -191,11 +191,11 @@ batch stages. A shared lock prevents overlapping scheduled and manual runs.
 ### ML dataset: delays and features
 
 ```bash
-bash scripts/profile-data.sh                 # read-only data check, incl. GPS vs GTFS trip_id match
-bash scripts/build-ml-dataset.sh             # build stop_visits and ml_dataset for all available days
+bash scripts/analysis/profile-data.sh                 # read-only data check, incl. GPS vs GTFS trip_id match
+bash scripts/build-ml-dataset.sh                      # build stop_visits and ml_dataset for all available days
 bash scripts/build-ml-dataset.sh --start-date 2026-11-16 --end-date 2026-11-17
-bash scripts/diagnose-delays.sh              # quality of the estimated delays and baselines
-bash scripts/show-sample.sh ml_dataset 5     # print a few rows (also: stop_visits, schedule_stops)
+bash scripts/analysis/diagnose-delays.sh              # quality of the estimated delays and baselines
+bash scripts/analysis/show-sample.sh ml_dataset 5     # print a few rows (also: stop_visits, schedule_stops)
 ```
 
 The build also runs automatically as the last stage of every full batch cycle
@@ -357,7 +357,8 @@ spark/batch/             Raw → Cleaned and batch orchestration
 spark/downstream/        Cleaned → Enriched reference data
 spark/ml/                Delay estimation, features and ML dataset (Cleaned → Enriched)
 spark/streaming/         Planned streaming implementation
-scripts/                 Bootstrap, manual jobs and service controls
+scripts/                 Bootstrap, pipeline jobs and service controls
+scripts/analysis/        Read-only data checks and diagnostics
 tests/                   Unit and integration tests on a synthetic city
 docs/data-contracts.md   Sources, schemas and transformation contracts
 docs/ml-dataset.md       Delay definition, ML columns, leakage rules, tests

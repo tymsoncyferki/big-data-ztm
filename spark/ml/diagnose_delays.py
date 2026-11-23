@@ -3,7 +3,7 @@
 Run after build_ml_dataset.py when the numbers look odd, e.g. when the
 "no-change" baseline is worse than "predict 0":
 
-    bash scripts/diagnose-delays.sh [--start-date ...] [--end-date ...]
+    bash scripts/analysis/diagnose-delays.sh [--start-date ...] [--end-date ...]
 
 It answers:
   A. How are delays / visit-to-visit changes / distance-to-stop distributed?

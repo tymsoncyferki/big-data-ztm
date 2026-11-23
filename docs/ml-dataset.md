@@ -8,10 +8,10 @@ It reads `/data/cleaned/*` (and `/data/enriched/gtfs_trip_services`), writes onl
 
 | Script (`scripts/`) | Python file (`spark/ml/`) | Purpose |
 |---|---|---|
-| `profile-data.sh` | `profile_data.py` | Read-only data check: rows per day, GTFS feeds, **GPS `trip_id` vs GTFS match rate** |
+| `analysis/profile-data.sh` | `profile_data.py` | Read-only data check: rows per day, GTFS feeds, **GPS `trip_id` vs GTFS match rate** |
 | `build-ml-dataset.sh` | `build_ml_dataset.py` | Build `stop_visits` and `ml_dataset` (full or date-limited rebuild, one day at a time) |
-| `diagnose-delays.sh` | `diagnose_delays.py` | Quality of the estimated delays: distributions, first/last stops, trams vs buses, baselines |
-| `show-sample.sh` | `show_sample.py` | Print a few readable rows of `stop_visits`, `ml_dataset` or `schedule_stops` |
+| `analysis/diagnose-delays.sh` | `diagnose_delays.py` | Quality of the estimated delays: distributions, first/last stops, trams vs buses, baselines |
+| `analysis/show-sample.sh` | `show_sample.py` | Print a few readable rows of `stop_visits`, `ml_dataset` or `schedule_stops` |
 | (called by the pipeline) | `ml_stage.py` | Automatic refresh inside the 15-minute batch (timetable lookup every cycle, ML dataset throttled) |
 | (called by `ml_stage.py`) | `schedule_stops.py` | Build the timetable lookup `schedule_stops` for Spark Structured Streaming |
 
@@ -21,11 +21,11 @@ Shared code: `ml_common.py` (Spark settings, distance, grid, service-day start, 
 ## How to run
 
 ```bash
-bash scripts/profile-data.sh                 # 1. check the data (run first on new data)
-bash scripts/build-ml-dataset.sh             # 2. build everything that is available
+bash scripts/analysis/profile-data.sh                 # 1. check the data (run first on new data)
+bash scripts/build-ml-dataset.sh                      # 2. build everything that is available
 bash scripts/build-ml-dataset.sh --start-date 2026-11-16 --end-date 2026-11-17
-bash scripts/diagnose-delays.sh              # 3. check the quality of the delays
-bash scripts/show-sample.sh ml_dataset 5     # 4. look at a few rows (or: stop_visits, schedule_stops; --route 175)
+bash scripts/analysis/diagnose-delays.sh              # 3. check the quality of the delays
+bash scripts/analysis/show-sample.sh ml_dataset 5     # 4. look at a few rows (or: stop_visits, schedule_stops; --route 175)
 ```
 
 Options of the build (all optional): `--stop-radius-m 75`, `--max-abs-delay-s 7200`,
@@ -138,7 +138,7 @@ the change of delay since the vehicle's previous visit.
 
 ## Inspecting the data
 
-* `bash scripts/show-sample.sh stop_visits 5` / `ml_dataset 5` / `schedule_stops 5` prints the schema, the row count and a few rows.
+* `bash scripts/analysis/show-sample.sh stop_visits 5` / `ml_dataset 5` / `schedule_stops 5` prints the schema, the row count and a few rows.
 * HDFS browser: <http://localhost:9870> → Utilities → Browse the file system → `/data/enriched`.
 * Command line: `docker compose exec -T namenode hdfs dfs -ls -R /data/enriched`.
 * Sizes: `docker compose exec -T namenode hdfs dfs -du -s -h /data/enriched/*`.

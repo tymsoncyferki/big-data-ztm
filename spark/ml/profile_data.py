@@ -8,7 +8,7 @@ Run this FIRST on the real data (before build_ml_dataset.py). It is read-only
   3. Does `trip_id` in GPS equal `trip_id` in GTFS?   <-- the critical one
   4. How many GPS vehicles / pings can be given a route and a timetable?
 
-    bash scripts/profile-data.sh [--start-date 2026-11-16] [--end-date 2026-11-17]
+    bash scripts/analysis/profile-data.sh [--start-date 2026-11-16] [--end-date 2026-11-17]
 
 Writes /data/enriched/_ml_reports/profile_<timestamp>.json
 """

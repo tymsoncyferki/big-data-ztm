@@ -1,5 +1,5 @@
 # Collects Windows events and Docker Desktop logs from a given time window after a crash.
-# Usage: .\scripts\collect-crash-logs.ps1 "2026-11-16 21:30" "2026-11-16 23:00"
+# Usage: .\scripts\analysis\collect-crash-logs.ps1 "2026-11-16 21:30" "2026-11-16 23:00"
 
 param(
     [Parameter(Mandatory = $true)][datetime]$Since,

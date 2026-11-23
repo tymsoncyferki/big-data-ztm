@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Collects logs from a given time window after a crash (run inside WSL).
 # Run it BEFORE recreating containers, `docker compose up -d` with changes wipes docker logs.
-# Usage: bash scripts/collect-crash-logs.sh "2026-11-16 21:30" "2026-11-16 23:00"
+# Usage: bash scripts/analysis/collect-crash-logs.sh "2026-11-16 21:30" "2026-11-16 23:00"
 
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 if [[ $# -ne 2 ]]; then
-  echo 'Usage: bash scripts/collect-crash-logs.sh "YYYY-MM-DD HH:MM" "YYYY-MM-DD HH:MM"'
+  echo 'Usage: bash scripts/analysis/collect-crash-logs.sh "YYYY-MM-DD HH:MM" "YYYY-MM-DD HH:MM"'
   exit 1
 fi
 
