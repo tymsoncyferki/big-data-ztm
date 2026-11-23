@@ -39,7 +39,6 @@ dist/
 !/docs/milestone*/report*.blx.bib
 
 
-.idea/
 /local
 CLAUDE.md
 *:Zone.Identifier

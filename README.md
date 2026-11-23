@@ -362,5 +362,6 @@ scripts/analysis/        Read-only data checks and diagnostics
 tests/                   Unit and integration tests on a synthetic city
 docs/data-contracts.md   Sources, schemas and transformation contracts
 docs/ml-dataset.md       Delay definition, ML columns, leakage rules, tests
-docs/milestone 1/        Milestone 1 report and diagrams
+docs/milestone_1/        Milestone 1 report and diagrams
+docs/milestone_2/        Milestone 2 report, presentation and tests
 ```
