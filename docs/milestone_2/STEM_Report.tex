@@ -523,7 +523,7 @@ The feed from 17 November is missing because of our infrastructure outage, in th
 \subsection{Conceptual Data Model}
 
 The conceptual data model of the system is presented in Figure~\ref{fig:conceptual-model}.
-It consists of four entities, one for each data source:
+It consists of five entities, one for each data source and time entity:
 
 \begin{itemize}
     \item \textbf{Vehicle Positions} -- live GPS positions of active buses and trams,
@@ -534,8 +534,15 @@ It consists of four entities, one for each data source:
     precipitation, humidity, wind) measured at stations across the city.
     \item \textbf{Air Quality Observations} -- air quality parameters measured at
     monitoring stations across the city.
+    \item \textbf{Time} - a time slot of 10 seconds (timestamp, date, hour, minute,
+    day of week, holiday flag, peak/off-peak flag), shared by all other entities.
+
 \end{itemize}
 
+Time is a common dimension for all data sources. Each Vehicle Positions record is
+\emph{recorded at}, each Weather Observations record is \emph{observed at}, each Air
+Quality Observations record is \emph{measured at} exactly one time slot, each timetable record refers
+ refers to \emph{scheduled departure at}.
 Vehicle Positions is the central entity. It is associated with Timetables via trip id, stop and time, which allows the delay of a vehicle to be calculated. It is also
 associated with Weather Observations and Air Quality Observations via time and location,
 which allows delays to be related to the conditions in which they occurred. Timetables
